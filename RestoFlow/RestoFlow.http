@@ -1,0 +1,6 @@
+@RestoFlow_HostAddress = http://localhost:5296
+
+GET {{RestoFlow_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

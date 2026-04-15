@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Business/Business.csproj" />
+  <Project Path="Core/Core.csproj" />
+  <Project Path="Data/Data.csproj" />
+  <Project Path="RestoFlow/RestoFlow.API.csproj" />
+</Solution>
