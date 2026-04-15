@@ -1,28 +1,27 @@
 ﻿using Core.Concretes.Entities;
+using Microsoft.AspNetCore.Identity; // IdentityRole için gerekli
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Data.Contexts
 {
-    // IdentityDbContext kullanarak hem kendi tablolarımızı hem de 
-    // hazır kullanıcı/rol tablolarını (AspNetUsers vb.) yönetiyoruz.
-    public class AppDbContext : IdentityDbContext<AppUser>
+    // IdentityDbContext<AppUser, IdentityRole, string> kullanarak:
+    // 1. AppUser: Kendi kullanıcı sınıfımız
+    // 2. IdentityRole: Standart rol sınıfımız
+    // 3. string: Kullanıcı ve Rol ID'lerinin tipi (Guid yerine string kullanıyoruz)
+    public class AppDbContext : IdentityDbContext<AppUser, IdentityRole, string>
     {
-        // Constructor: Veritabanı bağlantı ayarlarını (Connection String) dışarıdan alır.
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
         {
         }
 
-        // Veritabanında oluşacak tablolarımızı tanımlıyoruz:
         public DbSet<Product> Products { get; set; }
         public DbSet<Order> Orders { get; set; }
         public DbSet<OrderItem> OrderItems { get; set; }
 
-        // Tablolar oluşturulurken yapılacak özel ayarlar (İlişkiler, kısıtlamalar)
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
-            // Bu satır Data katmanındaki tüm 'IEntityTypeConfiguration' dosyalarını bulur ve uygular.
             builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
         }
     }

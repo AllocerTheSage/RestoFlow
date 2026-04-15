@@ -1,65 +1,89 @@
 ﻿using Business.Abstracts; // İş mantığı arayüzlerine (IProductService gibi) erişmek için
 using Business.DTOs.ProductDtos; // Veri taşıma nesnelerine (ProductDto) erişmek için
+using Core.Constants; // Permissions (Yetki isimleri) sınıfına erişmek için
+using Microsoft.AspNetCore.Authorization; // [Authorize] ve [Policy] için
 using Microsoft.AspNetCore.Mvc; // API Controller özelliklerini kullanabilmek için
 
 namespace WebAPI.Controllers
 {
-    // [Route] -> Bu Controller'a nasıl ulaşılacağını belirler. 
-    // [controller] ifadesi otomatik olarak sınıf ismini (Products) alır. 
-    // Yani adres: https://localhost:7000/api/products olur.
     [Route("api/[controller]")]
-
-    // [ApiController] -> Bu sınıfın bir Web API olduğunu sisteme bildirir.
-    // Gelen verilerin otomatik doğrulanmasını (Validation) sağlar.
     [ApiController]
+    // [Authorize] -> Bu Controller'daki tüm kapılar genel olarak kilitli. 
+    // Ancak her kapının kendine has bir "Politika" anahtarı olacak.
+    [Authorize]
     public class ProductsController : ControllerBase
     {
-        // _productService -> Bizim mutfağımız (Business). 
-        // Veritabanı ve iş kuralları ile ilgili her şeyi bu servis üzerinden halledeceğiz.
         private readonly IProductService _productService;
 
-        // CONSTRUCTOR (Yapıcı Metot)
-        // Program çalıştığında, .NET bize otomatik olarak bir IProductService (ProductManager) nesnesi getirir.
-        // Buna "Dependency Injection" diyoruz. Yani "ihtiyacım olanı bana dışarıdan ver" diyoruz.
+        // DI (Dependency Injection): İhtiyacımız olan servisi dışarıdan alıyoruz.
         public ProductsController(IProductService productService)
         {
             _productService = productService;
         }
 
-        // [HttpGet("getall")] -> Tarayıcıdan veya dışarıdan "getall" diye bir istek geldiğinde burası çalışır.
-        // Örnek Adres: api/products/getall
+        // ====================================================================
+        // 1. ÜRÜN LİSTELEME (GARSON & MUTFAK & PATRON)
+        // ====================================================================
+        // [GARSON] Müşteriden sipariş alırken stok miktarını bu sayede görür.
         [HttpGet("getall")]
+        [Authorize(Policy = Permissions.Operations.ViewStockCount)]
         public async Task<IActionResult> GetAll()
         {
-            // Servise gidip "Bana tüm ürünleri getir" diyoruz.
             var result = await _productService.GetAllAsync();
-
-            // Eğer mutfaktaki işlem başarılıysa (result.Success == true)
             if (result.Success)
             {
-                // Kullanıcıya veriyi (Data) ve "200 OK" (Her şey yolunda) mesajını dönüyoruz.
                 return Ok(result);
             }
-
-            // İşlem başarısızsa (Örn: Veritabanına ulaşılamadı), kullanıcıya hata mesajını ve 400 kodunu dönüyoruz.
             return BadRequest(result);
         }
 
-        // [HttpPost("add")] -> Dışarıdan yeni bir veri gönderildiğinde (Kaydetme işlemi) burası çalışır.
-        // Örnek Adres: api/products/add
+        // ====================================================================
+        // 2. YENİ ÜRÜN EKLEME (SADECE PATRON/YÖNETİM)
+        // ====================================================================
+        // Menüye yeni bir yemek veya içecek ekleme yetkisi.
         [HttpPost("add")]
+        [Authorize(Policy = Permissions.Administration.ManageMenu)]
         public async Task<IActionResult> Add(ProductDto productDto)
         {
-            // Kullanıcıdan gelen "productDto" paketini (Ad, Fiyat, Stok) alıp servise "Bunu ekle" diyoruz.
             var result = await _productService.AddAsync(productDto);
-
-            // Ekleme işlemi başarılıysa "200 OK" ile sonucumuzu dönüyoruz.
             if (result.Success)
             {
                 return Ok(result);
             }
+            return BadRequest(result);
+        }
 
-            // Ekleme sırasında bir kural ihlali olduysa (Örn: Fiyat 0'dan küçükse) hata dönüyoruz.
+        // ====================================================================
+        // 3. STOK EKSİLTME - EKSİLT (-) BUTONU (SADECE MUTFAK)
+        // ====================================================================
+        // [MUTFAK] "Ürünü hazırladım, verdim" dediği an stoktan düşer.
+        // Garsonun ekranındaki sayı anında azalır (İletişimsiz İletişim).
+        [HttpPatch("reduce-stock/{id}")]
+        [Authorize(Policy = Permissions.Operations.ConfirmAndDeductStock)]
+        public async Task<IActionResult> ReduceStock(int id)
+        {
+            var result = await _productService.ReduceStockAsync(id);
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+            return BadRequest(result);
+        }
+
+        // ====================================================================
+        // 4. SATIŞA KAPATMA - ÜRETİM DURDURMA (SADECE MUTFAK & PATRON)
+        // ====================================================================
+        // [MUTFAK] "Pizza bitti" veya "Fırın bozuldu" dediğinde ürünü griye çeker.
+        // Garsonun ekranında ürünün üstü çizilir.
+        [HttpPatch("toggle-availability/{id}")]
+        [Authorize(Policy = Permissions.Operations.ToggleAvailability)]
+        public async Task<IActionResult> ToggleAvailability(int id)
+        {
+            var result = await _productService.ToggleAvailabilityAsync(id);
+            if (result.Success)
+            {
+                return Ok(result);
+            }
             return BadRequest(result);
         }
     }

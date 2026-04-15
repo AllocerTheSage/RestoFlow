@@ -5,6 +5,7 @@ using Core.Abstracts;
 using Core.Abstracts.IRepositories;
 using Core.Concretes.Results;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging; // 1. LOGLAMA İÇİN EKLENDİ
 
 namespace Business.Concretes
 {
@@ -13,16 +14,21 @@ namespace Business.Concretes
         private readonly IGenericRepository<Core.Concretes.Entities.Product> _productRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
+        private readonly ILogger<ProductManager> _logger; // 2. LOGLAYICI TANIMLANDI
 
-        // Constructor Injection: İhtiyacımız olan araçları dışarıdan alıyoruz.
-        public ProductManager(IGenericRepository<Core.Concretes.Entities.Product> productRepository, IUnitOfWork unitOfWork, IMapper mapper)
+        // Constructor Injection
+        public ProductManager(
+            IGenericRepository<Core.Concretes.Entities.Product> productRepository,
+            IUnitOfWork unitOfWork,
+            IMapper mapper,
+            ILogger<ProductManager> logger) // 3. DIŞARIDAN İSTENDİ
         {
             _productRepository = productRepository;
             _unitOfWork = unitOfWork;
             _mapper = mapper;
+            _logger = logger; // 4. EŞLEŞTİRİLDİ
         }
 
-        // Tüm ürünleri getirir
         public async Task<IDataResult<List<ProductDto>>> GetAllAsync()
         {
             var products = await _productRepository.GetAll().ToListAsync();
@@ -30,7 +36,6 @@ namespace Business.Concretes
             return new SuccessDataResult<List<ProductDto>>(productDtos, "Ürünler başarıyla listelendi.");
         }
 
-        // Id'ye göre tek bir ürün getirir
         public async Task<IDataResult<ProductDto>> GetByIdAsync(int id)
         {
             var product = await _productRepository.GetByIdAsync(id);
@@ -42,22 +47,18 @@ namespace Business.Concretes
             return new SuccessDataResult<ProductDto>(productDto);
         }
 
-        // Yeni ürün ekleme
         public async Task<IResult> AddAsync(ProductDto productDto)
         {
-            // 1. DTO'yu veritabanı nesnesine (Entity) çeviriyoruz
             var product = _mapper.Map<Core.Concretes.Entities.Product>(productDto);
-
-            // 2. Repository üzerinden ekleme emrini veriyoruz
             await _productRepository.AddAsync(product);
-
-            // 3. UnitOfWork ile değişikliği veritabanına fiziksel olarak yazıyoruz
             await _unitOfWork.SaveChangesAsync();
+
+            // 5. İŞTE BURASI: Ürün veritabanına başarıyla yazıldıktan hemen sonra log atıyoruz
+            _logger.LogInformation("Sisteme yeni bir ürün eklendi: {@Product}", productDto);
 
             return new SuccessResult("Ürün başarıyla eklendi.");
         }
 
-        // Ürün güncelleme
         public async Task<IResult> UpdateAsync(ProductDto productDto)
         {
             var product = _mapper.Map<Core.Concretes.Entities.Product>(productDto);
@@ -66,7 +67,6 @@ namespace Business.Concretes
             return new SuccessResult("Ürün başarıyla güncellendi.");
         }
 
-        // Ürün silme
         public async Task<IResult> DeleteAsync(int id)
         {
             var product = await _productRepository.GetByIdAsync(id);

@@ -1,3 +1,6 @@
+using Data.Seeds;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.OpenApi.Models;
 using Serilog;
 using WebAPI.Extensions;
 
@@ -13,9 +16,47 @@ builder.Host.UseSerilog();
 builder.Services.AddControllers();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-// 3. SWAGGER SERVİSLERİ (Muhtemelen burası silindi, bunları mutlaka ekle)
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+// SWAGGER'A KART OKUYUCU (AUTHORIZE BUTONU) EKLEME
+// builder.Services.AddSwaggerGen: Swagger dokümantasyon oluşturucusunu yapılandırmaya başlar.
+builder.Services.AddSwaggerGen(c =>
+{
+    // Swagger arayüzünün en üstünde görünecek başlık ve versiyon bilgisi.
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "RestoFlow API", Version = "v1" });
+
+    // 1. GÜVENLİK TANIMI (Security Definition):
+    // Swagger'a hangi kimlik doğrulama yöntemini desteklediğimizi öğretiyoruz.
+    // Burada "Bearer" adında bir güvenlik şeması tanımlıyoruz.
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization", // HTTP isteğinin 'Header' kısmında hangi isimle görüneceği (Standart: Authorization).
+        Type = SecuritySchemeType.ApiKey, // Güvenlik tipinin bir anahtar (Token) olduğunu belirtir.
+        Scheme = "Bearer", // Kullanılan şemanın adı.
+        BearerFormat = "JWT", // Anahtarın formatının JSON Web Token (JWT) olduğunu bildirir.
+        In = ParameterLocation.Header, // Bu anahtarın HTTP isteğinin neresinde (Header/Başlık kısmında) taşınacağını söyler.
+
+        // Kullanıcıya Swagger arayüzünde ne yapması gerektiğini anlatan açıklama metni:
+        Description = "JWT Authorization header using the Bearer scheme. \r\n\r\n Aşağıdaki kutuya 'Bearer' yazıp bir boşluk bırakın ve ardından Token'ınızı yapıştırın.\r\n\r\nÖrnek: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6...' "
+    });
+
+    // 2. GÜVENLİK GEREKSİNİMİ (Security Requirement):
+    // Yukarıda tanımladığımız "Bearer" şemasının hangi API uçlarında geçerli olacağını belirliyoruz.
+    // Bu kod bloğu, Swagger'daki TÜM metodların yanına bir 'asma kilit' simgesi koyar.
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme, // Referans tipinin bir güvenlik şeması olduğunu belirtir.
+                    Id = "Bearer" // Yukarıda 'AddSecurityDefinition' içinde verdiğimiz ID ile aynı olmalı.
+                }
+            },
+            Array.Empty<string>() // Herhangi bir özel kapsam (scope) gerekmediğini belirtir.
+        }
+    });
+});
 
 // --- BUILD İŞLEMİ ---
 var app = builder.Build();
@@ -30,7 +71,14 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication(); // ÖNCE KİMLİK KONTROLÜ (Kimlik var mı?)
+app.UseAuthorization();  // SONRA YETKİ KONTROLÜ (Bu odaya girmeye yetkisi var mı?)
 app.UseAuthorization();
 app.MapControllers();
+using (var scope = app.Services.CreateScope())
+{
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    await DbSeeder.SeedRolesAndPermissionsAsync(roleManager);
+}
 
 app.Run();
