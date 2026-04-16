@@ -20,7 +20,7 @@ namespace Data.Configurations
             builder.Property(x => x.Price).IsRequired();
 
             // Stock alanı zorunlu
-            builder.Property(x => x.Stock).IsRequired();
+            builder.Property(x => x.StockQuantity).IsRequired();
 
             // Tablo ismi (Opsiyonel, belirtmezsek 'Products' olur)
             builder.ToTable("Products");

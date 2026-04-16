@@ -12,43 +12,35 @@ using System.Text;
 
 namespace Business.Concretes
 {
-    /// <summary>
-    /// Kimlik doğrulama işlemlerinden sorumlu merkez sınıf.
-    /// Kayıt olma, giriş yapma ve güvenli anahtar (Token) üretme işlerini yönetir.
-    /// </summary>
     public class AuthManager : IAuthService
     {
-        // UserManager: Microsoft'un Identity kütüphanesiyle gelen, veritabanındaki 
-        // kullanıcı tablosuyla (AspNetUsers) konuşmamızı sağlayan devasa bir araçtır.
         private readonly UserManager<AppUser> _userManager;
-
-        // IConfiguration: appsettings.json dosyasındaki "SecretKey" gibi hassas ayarları okumak için kullanılır.
+        // YENİ EKLENDİ: Rollerin içindeki yetkileri (Claimleri) okumak için RoleManager'ı çağırıyoruz.
+        // NOT: Eğer projende 'AppRole' diye bir sınıf oluşturduysan 'IdentityRole' yazan yeri 'AppRole' yap.
+        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IConfiguration _configuration;
 
-        public AuthManager(UserManager<AppUser> userManager, IConfiguration configuration)
+        // Constructor'a RoleManager'ı da ekledik (Dependency Injection)
+        public AuthManager(
+            UserManager<AppUser> userManager,
+            RoleManager<IdentityRole> roleManager,
+            IConfiguration configuration)
         {
             _userManager = userManager;
+            _roleManager = roleManager;
             _configuration = configuration;
         }
 
-        /// <summary>
-        /// Yeni bir kullanıcıyı sisteme kaydeder.
-        /// </summary>
         public async Task<IResult> RegisterAsync(RegisterDto registerDto)
         {
-            // 1. DTO'dan gelen verilerle yeni bir kullanıcı (Entity) oluşturuyoruz
             var user = new AppUser
             {
-                FirstName = registerDto.FirstName, // DTO'dan gelen Adı bağladık
-                LastName = registerDto.LastName,   // DTO'dan gelen Soyadı bağladık
+                FirstName = registerDto.FirstName,
+                LastName = registerDto.LastName,
                 UserName = registerDto.Username,
                 Email = registerDto.Email
             };
 
-            // 2. Güvenli Kayıt İşlemi:
-            // Identity burada şifreyi ASLA açık metin (plain text) olarak kaydetmez.
-            // Arka planda PBKDF2 gibi algoritmalarla şifreyi "Hash"leyerek (anlamsız bir diziye çevirerek) saklar.
-            // Örnek: "123456" -> "AQAAAAEAACcQAAAAEG..."
             var result = await _userManager.CreateAsync(user, registerDto.Password);
 
             if (result.Succeeded)
@@ -56,77 +48,82 @@ namespace Business.Concretes
                 return new SuccessResult("Kullanıcı başarıyla kaydedildi.");
             }
 
-            // Hata Durumu: Şifre çok kısa olabilir, büyük harf eksik olabilir veya kullanıcı adı alınmış olabilir.
-            // Identity'den gelen tüm hata mesajlarını birleştirip geri döndürüyoruz.
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
             return new ErrorResult($"Kayıt başarısız: {errors}");
         }
 
-        /// <summary>
-        /// Kullanıcı bilgilerini doğrular ve başarılıysa giriş anahtarı (Token) verir.
-        /// </summary>
         public async Task<IDataResult<string>> LoginAsync(LoginDto loginDto)
         {
-            // 1. Kullanıcıyı Bulma:
-            // Veritabanında bu kullanıcı isminde biri var mı?
             var user = await _userManager.FindByNameAsync(loginDto.Username);
             if (user == null)
             {
-                // Güvenlik ipucu: "Kullanıcı adı veya şifre hatalı" demek daha güvenlidir (hangi bilginin yanlış olduğunu gizler).
                 return new ErrorDataResult<string>("Kullanıcı bulunamadı.");
             }
 
-            // 2. Şifre Doğrulama:
-            // Veritabanındaki hash ile kullanıcının girdiği şifreyi Identity bizim yerimize karşılaştırır.
             var isPasswordValid = await _userManager.CheckPasswordAsync(user, loginDto.Password);
             if (!isPasswordValid)
             {
                 return new ErrorDataResult<string>("Şifre hatalı.");
             }
 
-            // 3. Token Üretimi:
-            // Kimlik doğrulandı, şimdi kullanıcıya "bu kartla sistemde gezebilirsin" diyoruz.
-            var token = GenerateJwtToken(user);
+            // DİKKAT: Artık yetkileri DB'den çekeceği için bu metodu "await" ile bekletiyoruz.
+            var token = await GenerateJwtTokenAsync(user);
             return new SuccessDataResult<string>(token, "Giriş başarılı.");
         }
 
-        /// <summary>
-        /// JSON Web Token (JWT) üreten yardımcı metot.
-        /// Bu metot dijital bir mühür basar.
-        /// </summary>
-        private string GenerateJwtToken(AppUser user)
+        // DİKKAT: Veritabanına bağlanacağı için metodu 'async Task<string>' olarak güncelledik.
+        private async Task<string> GenerateJwtTokenAsync(AppUser user)
         {
-            // appsettings.json'daki ayarları çekiyoruz.
             var jwtSettings = _configuration.GetSection("JwtSettings");
             var secretKey = jwtSettings["SecretKey"];
 
-            // 1. İmza Hazırlığı:
-            // SecretKey, bizim "mühür" anahtarımızdır. Bu anahtarı bilen biri ancak token'ın geçerliliğini kontrol edebilir.
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
-            // 2. Claims (Hak İddiaları):
-            // Token'ın içine gömülecek "kimlik bilgileri"dir. 
-            // Bu bilgiler şifrelenmez (Base64 ile kodlanır), herkes okuyabilir ama kimse değiştiremez (mühür bozulur).
-            // Claim'leri pasaporttaki vizeler veya damgalar gibi düşünebilirsin.
-            var claims = new[]
+            // 1. Temel Kimlik Bilgilerini Listeye Ekle
+            var claims = new List<Claim>
             {
-                new Claim(JwtRegisteredClaimNames.Sub, user.UserName), // Kullanıcı adı (Subject)
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()), // Her token için benzersiz ID
-                new Claim(ClaimTypes.NameIdentifier, user.Id), // Veritabanındaki Id
-                // İleride buraya yetkileri ekleyeceğiz: new Claim(ClaimTypes.Role, "Admin")11
+                new Claim(JwtRegisteredClaimNames.Sub, user.UserName),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim(ClaimTypes.NameIdentifier, user.Id)
             };
 
-            // 3. Token Oluşturma Özellikleri:
-            var token = new JwtSecurityToken(
-                issuer: jwtSettings["Issuer"], // Bu token'ı kim üretti? (RestoFlowAPI)
-                audience: jwtSettings["Audience"], // Bu token kimler için? (RestoFlowUser)
-                claims: claims, // Kimlik bilgileri
-                expires: DateTime.Now.AddDays(1), // Token ne kadar süre geçerli? (Örn: 24 saat)
-                signingCredentials: credentials); // Dijital imzamız
+            // ==============================================================
+            // 2. İŞTE O EKSİK SİHİR BURASI: VERİTABANINDAN YETKİLERİ ÇEKME
+            // ==============================================================
 
-            // Token'ı string (metin) formatına çevirip geri yolluyoruz.
-            // Sonuç şuna benzer: "eyJhbGciOiJIUzI1NiIsInR5..."
+            // Kullanıcının rollerini buluyoruz (Örn: "Admin")
+            var userRoles = await _userManager.GetRolesAsync(user);
+            foreach (var userRole in userRoles)
+            {
+                // Rolün kendisini Token'a ekle
+                claims.Add(new Claim(ClaimTypes.Role, userRole));
+
+                // O role ait veritabanındaki "Permission" yetkilerini bul
+                var role = await _roleManager.FindByNameAsync(userRole);
+                if (role != null)
+                {
+                    var roleClaims = await _roleManager.GetClaimsAsync(role);
+                    foreach (var roleClaim in roleClaims)
+                    {
+                        // DB'deki ManageMenu, CreateOrder gibi yetkileri Token'a mühürle!
+                        claims.Add(roleClaim);
+                    }
+                }
+            }
+
+            // (Opsiyonel) Eğer kullanıcıya özel (rolden bağımsız) yetkiler vermişsek onları da ekle
+            var userClaims = await _userManager.GetClaimsAsync(user);
+            claims.AddRange(userClaims);
+            // ==============================================================
+
+            var token = new JwtSecurityToken(
+                issuer: jwtSettings["Issuer"],
+                audience: jwtSettings["Audience"],
+                claims: claims, // Artık içi yetki dolu listemizi buraya veriyoruz!
+                expires: DateTime.Now.AddDays(1),
+                signingCredentials: credentials);
+
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }

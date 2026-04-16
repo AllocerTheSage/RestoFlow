@@ -1,0 +1,24 @@
+﻿using Business.DTOs.OrderDtos;
+using Core.Abstracts;
+using Core.Concretes.Entities;
+
+namespace Business.Abstracts
+{
+    public interface IOrderService
+    {
+        // Garson siparişi girdiğinde çalışacak metod.
+        Task<IResult> CreateOrderAsync(OrderCreateDto orderDto, string waiterId);
+        // Bekleyen siparişleri mutfak ekranı için getirir
+        Task<IDataResult<List<Order>>> GetPendingOrdersAsync();
+
+        // Siparişi "Hazır" durumuna getirir ve stoğu otomatik düşer
+        Task<IResult> SetOrderReadyAsync(int orderId);
+
+        // Ödeme alındıktan sonra siparişi "Tamamlandı" durumuna getirir.
+        Task<IResult> CloseOrderAsync(int orderId);
+        // Patron ekranı için: Sadece o gün tamamlanmış (Completed) siparişlerin toplam tutarını hesaplar.
+        Task<IDataResult<decimal>> GetDailyRevenueAsync();
+        // Bir siparişi, belirtilen bir sebeple iptal eder. Gerekirse stokları geri iade alır.
+        Task<IResult> CancelOrderAsync(int orderId, string cancellationReason);
+    }
+}

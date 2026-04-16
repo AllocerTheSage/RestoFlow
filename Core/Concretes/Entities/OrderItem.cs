@@ -2,20 +2,33 @@
 
 namespace Core.Concretes.Entities
 {
-    // Adisyonun içindeki her bir satırı temsil eden Class
     public class OrderItem : BaseEntity
     {
-        // Kaç adet sipariş verildi?
         public int Quantity { get; set; }
-
-        // Ürünün o anki fiyatı (Ürün fiyatı değişse bile adisyon sabit kalmalı)
         public decimal UnitPrice { get; set; }
 
-        // Hangi adisyona ait? (Dış Anahtar - Foreign Key)
+        // Müşteri Notu (Mutfak ekranında kırmızı yazıyla çıkacak)
+        // Örn: "Acısız", "Buzsuz", "Çok pişmiş"
+        public string? Note { get; set; }
+
+        // ==========================================
+        // YENİ EKLENEN DETAYLAR
+        // ==========================================
+
+        // Bu ürün İkram mı? (Default false. Eğer true ise fiyat 0 hesaplanır)
+        // Patronun yetkilerinde yazdığımız [AddComplimentary] burayı tetikler.
+        public bool IsComplimentary { get; set; } = false;
+
+        // İade/İptal Sebebi (Opsiyonel: Ürün mutfakta yandı mı, müşteri mi beğenmedi?)
+        // Patronun [ProcessReturn] yetkisi kullanıldığında burası doldurulur.
+        public string? ReturnedReason { get; set; }
+
+        // ==========================================
+
+        // İlişkiler
         public int OrderId { get; set; }
         public virtual Order Order { get; set; }
 
-        // Hangi ürün sipariş edildi? (Dış Anahtar - Foreign Key)
         public int ProductId { get; set; }
         public virtual Product Product { get; set; }
     }

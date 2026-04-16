@@ -47,6 +47,7 @@ namespace WebAPI.Extensions
             // İş kurallarımızın (Business Logic) çalıştığı yerler:
             services.AddScoped<IProductService, ProductManager>();
             services.AddScoped<IAuthService, AuthManager>();
+            services.AddScoped<IOrderService, OrderManager>();
 
             // ====================================================================
             // 3. AUTOMAPPER KAYDI (Veri Taşıyıcıları)

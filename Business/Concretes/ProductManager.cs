@@ -5,7 +5,7 @@ using Core.Abstracts;
 using Core.Abstracts.IRepositories;
 using Core.Concretes.Results;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging; // 1. LOGLAMA İÇİN EKLENDİ
+using Microsoft.Extensions.Logging; // LOGLAMA İÇİN EKLENDİ
 
 namespace Business.Concretes
 {
@@ -14,19 +14,19 @@ namespace Business.Concretes
         private readonly IGenericRepository<Core.Concretes.Entities.Product> _productRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IMapper _mapper;
-        private readonly ILogger<ProductManager> _logger; // 2. LOGLAYICI TANIMLANDI
+        private readonly ILogger<ProductManager> _logger; // LOGLAYICI TANIMLANDI
 
         // Constructor Injection
         public ProductManager(
             IGenericRepository<Core.Concretes.Entities.Product> productRepository,
             IUnitOfWork unitOfWork,
             IMapper mapper,
-            ILogger<ProductManager> logger) // 3. DIŞARIDAN İSTENDİ
+            ILogger<ProductManager> logger) // DIŞARIDAN İSTENDİ
         {
             _productRepository = productRepository;
             _unitOfWork = unitOfWork;
             _mapper = mapper;
-            _logger = logger; // 4. EŞLEŞTİRİLDİ
+            _logger = logger; // EŞLEŞTİRİLDİ
         }
 
         public async Task<IDataResult<List<ProductDto>>> GetAllAsync()
@@ -53,7 +53,7 @@ namespace Business.Concretes
             await _productRepository.AddAsync(product);
             await _unitOfWork.SaveChangesAsync();
 
-            // 5. İŞTE BURASI: Ürün veritabanına başarıyla yazıldıktan hemen sonra log atıyoruz
+            // Ürün veritabanına başarıyla yazıldıktan hemen sonra log atıyoruz
             _logger.LogInformation("Sisteme yeni bir ürün eklendi: {@Product}", productDto);
 
             return new SuccessResult("Ürün başarıyla eklendi.");
@@ -64,6 +64,9 @@ namespace Business.Concretes
             var product = _mapper.Map<Core.Concretes.Entities.Product>(productDto);
             _productRepository.Update(product);
             await _unitOfWork.SaveChangesAsync();
+
+            _logger.LogInformation("Ürün güncellendi. ID: {Id}", productDto.Id);
+
             return new SuccessResult("Ürün başarıyla güncellendi.");
         }
 
@@ -77,7 +80,64 @@ namespace Business.Concretes
 
             _productRepository.Delete(product);
             await _unitOfWork.SaveChangesAsync();
+
+            _logger.LogInformation("Ürün sistemden silindi. ID: {Id}", id);
+
             return new SuccessResult("Ürün başarıyla silindi.");
+        }
+
+        // ====================================================================
+        // MUTFAK VE OPERASYON MEKANİKLERİ (İletişimsiz İletişim Akışı)
+        // ====================================================================
+
+        // [MUTFAK] Mutfak personeli siparişi teslim ettiğinde (-) butonuna basar ve bu metot çalışır.
+        public async Task<IResult> ReduceStockAsync(int id)
+        {
+            // 1. Önce ürünü veritabanından bul
+            var product = await _productRepository.GetByIdAsync(id);
+            if (product == null)
+            {
+                return new ErrorResult("Ürün bulunamadı.");
+            }
+
+            // 2. Stok kontrolü yap (Eksiye düşmesini engelle)
+            if (product.StockQuantity > 0)
+            {
+                product.StockQuantity -= 1; // Stoktan 1 adet düş
+
+                _productRepository.Update(product); // Güncellemeyi repository'e bildir
+                await _unitOfWork.SaveChangesAsync(); // Değişikliği kaydet
+
+                // 3. Kritik operasyonu logla (Kim bilir belki gün sonu raporunda lazım olur)
+                _logger.LogInformation("Mutfak stok düşümü yaptı. Ürün ID: {ProductId}, Kalan Stok: {StockQuantity}", product.Id, product.StockQuantity);
+
+                return new SuccessResult("Stok başarıyla güncellendi.");
+            }
+
+            _logger.LogWarning("Stok yetersiz uyarısı alındı. Ürün ID: {ProductId}", product.Id);
+            return new ErrorResult("Uyarı: Stokta düşülecek ürün kalmadı!");
+        }
+
+        // [MUTFAK/PATRON] Ürün bittiğinde veya fırın bozulduğunda ürünü menüde "Satışa Kapalı" (Gri) yapar.
+        public async Task<IResult> ToggleAvailabilityAsync(int id)
+        {
+            var product = await _productRepository.GetByIdAsync(id);
+            if (product == null)
+            {
+                return new ErrorResult("Ürün bulunamadı.");
+            }
+
+            // 1. Durumu tersine çevir (True ise False, False ise True yapar)
+            product.IsActive = !product.IsActive;
+
+            _productRepository.Update(product);
+            await _unitOfWork.SaveChangesAsync();
+
+            // 2. Hangi duruma geçtiğini bul ve logla
+            string durumMesaji = product.IsActive ? "Satışa Açıldı" : "Satışa Kapatıldı";
+            _logger.LogInformation("Ürün satış durumu değiştirildi. Ürün ID: {ProductId}, Yeni Durum: {Durum}", product.Id, durumMesaji);
+
+            return new SuccessResult($"Ürün durumu güncellendi: {durumMesaji}.");
         }
     }
 }
