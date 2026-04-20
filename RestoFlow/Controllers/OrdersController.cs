@@ -100,7 +100,7 @@ namespace WebAPI.Controllers
         // [PATRON EKRANI] Günlük net ciroyu getirir.
         // Neden HttpGet? Çünkü veritabanına yeni bir veri EKLEMİYORUZ (Post değil), sadece veri OKUYORUZ.
         [HttpGet("daily-revenue")]
-        [Authorize] // Eğer sadece patron görsün istersen ileride buraya (Policy = "Admin") ekleyebiliriz.
+        [Authorize(Policy = "Admin")] // Eğer sadece patron görsün istersen ileride buraya (Policy = "Admin") ekleyebiliriz.
         public async Task<IActionResult> GetDailyRevenue()
         {
             // Garson, aşçıya (OrderService) gidip ciroyu soruyor:
@@ -117,7 +117,7 @@ namespace WebAPI.Controllers
         }
         // [KASİYER / YÖNETİCİ] Belirtilen siparişi bir sebeple iptal eder.
         [HttpPost("cancel/{id}")]
-        [Authorize]
+        [Authorize(Policy = Permissions.TableManagement.CancelOrder)]
         public async Task<IActionResult> CancelOrder(int id, [FromQuery] string reason)
         {
             // Garson, müşterinin iptal sebebini alıp mutfağa (OrderService) iletiyor.

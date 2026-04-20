@@ -5,6 +5,16 @@ using Serilog;
 using WebAPI.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        policyBuilder =>
+        {
+            policyBuilder.AllowAnyOrigin()
+                         .AllowAnyMethod()
+                         .AllowAnyHeader();
+        });
+});
 
 // 1. Serilog Yapılandırması
 Log.Logger = new LoggerConfiguration()
@@ -17,6 +27,21 @@ builder.Host.UseSerilog();
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+});
+// ====================================================================
+// CORS (Cross-Origin Resource Sharing) AYARLARI
+// ====================================================================
+// Şimdilik geliştirme aşamasında olduğumuz için "AllowAll" (Herkese İzin Ver) politikası yazıyoruz.
+// Canlıya alırken buraya sadece "www.restoflow.com" gibi kendi frontend adresimizi yazacağız.
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        policyBuilder =>
+        {
+            policyBuilder.AllowAnyOrigin()   // Hangi adresten gelirse gelsin (React, Angular, Mobil)
+                         .AllowAnyMethod()   // Hangi metotla gelirse gelsin (GET, POST, PUT, DELETE)
+                         .AllowAnyHeader();  // İçinde hangi başlık (Token vb.) olursa olsun kabul et
+        });
 });
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -67,17 +92,21 @@ var app = builder.Build();
 
 // 4. Middleware (Ara Katman) Ayarları
 app.UseSerilogRequestLogging();
+// [KRİTİK EKLEME]: Hata Yakalayıcı burada olmalı. 
+// Bu sayede aşağıdaki her şeyi (Swagger, Auth, Controllers) koruma altına alır.
+app.UseMiddleware<WebAPI.Middlewares.ExceptionMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
+app.UseCors("AllowAll");
 app.UseHttpsRedirection();
+// DİKKAT: CORS ayarı tam buraya, kimlik kontrolünden hemen önce gelmeli!
+app.UseCors("AllowAll");
 app.UseAuthentication(); // ÖNCE KİMLİK KONTROLÜ (Kimlik var mı?)
 app.UseAuthorization();  // SONRA YETKİ KONTROLÜ (Bu odaya girmeye yetkisi var mı?)
-app.UseAuthorization();
 app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
