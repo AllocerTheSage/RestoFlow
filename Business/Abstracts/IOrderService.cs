@@ -20,5 +20,11 @@ namespace Business.Abstracts
         Task<IDataResult<decimal>> GetDailyRevenueAsync();
         // Bir siparişi, belirtilen bir sebeple iptal eder. Gerekirse stokları geri iade alır.
         Task<IResult> CancelOrderAsync(int orderId, string cancellationReason);
+        // Belirli bir siparişteki, belirli bir ürünü "İkram" olarak işaretler ve fiyattan düşer.
+        Task<IResult> MakeItemComplimentaryAsync(int orderId, int orderItemId);
+        // Mevcut bir siparişe yeni ürünler ekler
+        Task<IResult> AddItemsToOrderAsync(AddItemsToOrderDto addItemsDto);
+        // Kasada siparişe (Adisyona) manuel indirim uygular.
+        Task<IResult> ApplyDiscountAsync(int orderId, decimal discountAmount);
     }
 }

@@ -74,17 +74,27 @@ namespace WebAPI.Controllers
             }
             return BadRequest(result);
         }
-        // [KASİYER] Hesabı kapatır ve adisyonu tamamlar.
+        // ==========================================
+        // 5. HESAP KAPATMA VE MASAYI BOŞALTMA UCU
+        // ==========================================
+        // Dışarıdan "/api/Orders/close/1" şeklinde bir istek geldiğinde çalışır.
         [HttpPost("close/{id}")]
-        [Authorize] // İleride buraya kasanın özel yetkisini (Policy) ekleyebiliriz.
+        [Authorize] // Kasiyer/Admin yetki kontrolü (Şu an token'ı olan herkes yapabilir, ileride sadece kasaya özel kısıtlayacağız).
         public async Task<IActionResult> CloseOrder(int id)
         {
+            // 1. ADIM: İŞİ YÖNETİCİYE DEVRETME
+            // Kasiyerin gönderdiği Adisyon ID'sini alıp bizim akıllı yöneticimize (OrderManager) gönderiyoruz.
+            // Yönetici gidip siparişi bulacak, "Completed" yapacak ve bağlı olduğu masayı "Empty" (Boş) yapacak.
             var result = await _orderService.CloseOrderAsync(id);
 
+            // 2. ADIM: SONUÇ KONTROLÜ
+            // Eğer işlem başarılıysa (Güvenlikten geçtiyse ve masa başarıyla boşaltıldıysa) 200 OK ve başarı mesajı dön.
             if (result.Success)
             {
                 return Ok(result);
             }
+
+            // Eğer sipariş bulunamadıysa VEYA henüz mutfakta hazırlanıyorsa (güvenlik duvarına takıldıysa) 400 Bad Request dön.
             return BadRequest(result);
         }
         // [PATRON EKRANI] Günlük net ciroyu getirir.
@@ -122,6 +132,64 @@ namespace WebAPI.Controllers
             }
 
             // Sipariş zaten kapalıysa veya bulunamadıysa 400 Bad Request dön.
+            return BadRequest(result);
+        }
+        // ==========================================
+        // 4. ŞEF / PATRON EKRANI: İKRAM YAP (MÜESSESEDEN)
+        // ==========================================
+        // Neden HttpPatch? Çünkü veritabanına yeni bir sipariş EKLEMİYORUZ (Post değil),
+        // Tüm siparişi GÜNCELLEMİYORUZ (Put değil). Sadece var olan bir siparişin 
+        // içindeki küçücük bir detayı (IsComplimentary) değiştiriyoruz (Yama yapıyoruz = Patch).
+        [HttpPatch("{orderId}/complimentary/{orderItemId}")]
+        [Authorize] // İleride buraya Policy = "AdminOrChef" ekleyeceğiz. Her garson kafasına göre ikram yapamasın!
+        public async Task<IActionResult> MakeItemComplimentary(int orderId, int orderItemId)
+        {
+            // Garson/Şef, hangi masanın (orderId) hangi ürününün (orderItemId) 
+            // ikram edileceğini alıp mutfağa (OrderService) iletiyor.
+            var result = await _orderService.MakeItemComplimentaryAsync(orderId, orderItemId);
+
+            // Eğer mutfak "Tamam, fiyatı adisyondan düştüm" derse, kasiyere 200 OK ile sonucu göster.
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+
+            // Eğer bir şeyler ters giderse (Hesap kapanmışsa, ürün yoksa vb.) 400 Bad Request ile hatayı fırlat.
+            return BadRequest(result);
+        }
+        // Mevcut ve açık olan bir siparişe (Adisyona) yeni ürünler ekler.
+        [HttpPost("add-items")]
+        [Authorize(Roles = "Admin,Waiter")] // Sadece Admin ve Garson masaya ürün ekleyebilir
+        public async Task<IActionResult> AddItemsToOrder([FromBody] AddItemsToOrderDto addItemsDto)
+        {
+            // İşi Manager'a (Aşçıya) devrediyoruz.
+            var result = await _orderService.AddItemsToOrderAsync(addItemsDto);
+
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+            return BadRequest(result);
+        }
+        // ==========================================
+        // 8. KASA OPERASYONU: İNDİRİM UYGULAMA UCU
+        // ==========================================
+        // Kasiyer, adisyon kapanmadan önce belirli bir tutarda indirim yapmak istediğinde çalışır.
+        // Dışarıdan "/api/Orders/apply-discount/1?amount=50" şeklinde çağrılır.
+        [HttpPost("apply-discount/{id}")]
+        [Authorize(Policy = Permissions.Finance.ApplyDiscount)] // Token'ındaki harika yetki sistemiyle tam uyumlu!
+        public async Task<IActionResult> ApplyDiscount(int id, [FromQuery] decimal amount)
+        {
+            // Kasiyerin girdiği masa ID'sini ve indirim tutarını alıp bizim akıllı kasaya (OrderManager) gönderiyoruz.
+            var result = await _orderService.ApplyDiscountAsync(id, amount);
+
+            // Eğer işlem başarılıysa (Güvenlikten geçtiyse ve hesap eksiden düşmediyse) 200 OK dön.
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+
+            // Hesabı kapanmış bir masaya indirim yapılmaya çalışılırsa 400 Bad Request ile işlemi reddet.
             return BadRequest(result);
         }
     }

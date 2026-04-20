@@ -23,6 +23,12 @@ namespace Core.Concretes.Entities
         // Patronun [ProcessReturn] yetkisi kullanıldığında burası doldurulur.
         public string? ReturnedReason { get; set; }
 
+        // [AKILLI STOK TAKİBİ]
+        // Bu alan, ürünün stok miktarının veritabanından düşülüp düşülmediğini kontrol eder.
+        // Neden ekledik? Masaya sonradan ürün eklendiğinde ve mutfak tekrar "Hazır" dediğinde,
+        // eski ürünlerin stoklarının tekrar tekrar (yanlışlıkla) düşülmesini engeller.
+        public bool IsStockDecreased { get; set; } = false;
+
         // ==========================================
 
         // İlişkiler
