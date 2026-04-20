@@ -86,5 +86,37 @@ namespace WebAPI.Controllers
             }
             return BadRequest(result);
         }
+        // ====================================================================
+        // 5. ÜRÜN GÜNCELLEME (SADECE PATRON/YÖNETİM)
+        // ====================================================================
+        // Enflasyon oldu fiyat değişecek veya ürünün adı değişecekse kullanılır.
+        [HttpPut("update")]
+        [Authorize(Policy = Permissions.Administration.ManageMenu)]
+        public async Task<IActionResult> Update(ProductDto productDto)
+        {
+            var result = await _productService.UpdateAsync(productDto);
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+            return BadRequest(result);
+        }
+
+        // ====================================================================
+        // 6. ÜRÜN SİLME (SADECE PATRON/YÖNETİM)
+        // ====================================================================
+        // Ürün menüden tamamen ve kalıcı olarak kaldırılacaksa kullanılır.
+        // (Geçici kapamalar için ToggleAvailability kullanılır, bu kalıcıdır).
+        [HttpDelete("delete/{id}")]
+        [Authorize(Policy = Permissions.Administration.ManageMenu)]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var result = await _productService.DeleteAsync(id);
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+            return BadRequest(result);
+        }
     }
 }

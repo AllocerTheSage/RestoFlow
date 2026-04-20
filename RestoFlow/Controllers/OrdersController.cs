@@ -192,5 +192,49 @@ namespace WebAPI.Controllers
             // Hesabı kapanmış bir masaya indirim yapılmaya çalışılırsa 400 Bad Request ile işlemi reddet.
             return BadRequest(result);
         }
+        // ==========================================
+        // 9. OPERASYON: MASA TAŞIMA (TABLE TRANSFER) UCU
+        // ==========================================
+        // Müşteri masa değiştirmek istediğinde garsonun tabletten tetikleyeceği uç.
+        // Dışarıdan "POST /api/Orders/transfer-table" şeklinde, JSON kuryesiyle (DTO) çağrılır.
+        [HttpPost("transfer-table")]
+        [Authorize(Policy = Permissions.TableManagement.TransferOrder)] // Token'daki yetkinle tam uyumlu!
+        public async Task<IActionResult> TransferTable([FromBody] TransferTableDto transferDto)
+        {
+            // Garsonun tabletten gönderdiği kuryeyi (DTO) alıp doğrudan yöneticiye (OrderManager) veriyoruz.
+            var result = await _orderService.TransferTableAsync(transferDto);
+
+            // Eğer taşıma başarılıysa (Hedef masa boşsa, adisyon açıksa vs.) 200 OK dön.
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+
+            // Hedef masa doluysa veya adisyon bulunamazsa 400 Bad Request ile işlemi reddet.
+            return BadRequest(result);
+        }
+        // ==========================================
+        // 10. OPERASYON: ADİSYONDAN ÜRÜN ÇIKARMA (SİLME) UCU
+        // ==========================================
+        // Garsonun yanlış girdiği veya müşterinin iptal ettiği tek bir ürünü adisyondan çıkarır.
+        // Neden HttpDelete? Çünkü var olan bir veriyi (satırı) siliyoruz.
+        // Dışarıdan "DELETE /api/Orders/1/remove-item/5" şeklinde çağrılır. (1: Adisyon ID, 5: Satır ID)
+        [HttpDelete("{orderId}/remove-item/{orderItemId}")]
+        [Authorize(Policy = Permissions.TableManagement.DeleteProduct)] // O muazzam asma kilidimiz devrede!
+        public async Task<IActionResult> RemoveItemFromOrder(int orderId, int orderItemId)
+        {
+            // İşi akıllı yöneticimize (OrderManager) devrediyoruz.
+            // O gidip stoğa bakacak, iade edilecekse edecek ve toplam fiyatı güncelleyecek.
+            var result = await _orderService.RemoveItemFromOrderAsync(orderId, orderItemId);
+
+            // Eğer işlem başarılıysa 200 OK dön.
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+
+            // Hesap zaten kapalıysa, iptal edildiyse veya ürün bulunamazsa 400 Bad Request dön.
+            return BadRequest(result);
+        }
     }
 }

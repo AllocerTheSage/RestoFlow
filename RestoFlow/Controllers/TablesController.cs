@@ -1,82 +1,83 @@
-﻿// Dosya Yolu: RestoFlow.API/Controllers/TablesController.cs
-using Business.Abstracts;
+﻿using Business.Abstracts;
 using Core.Abstracts;
 using Core.Abstracts.IRepositories;
 using Core.Concretes.Entities;
+using Core.Constants; // Yetki kilidimiz için gerekli
+using Microsoft.AspNetCore.Authorization; // [Authorize] için gerekli
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore; // ToListAsync metodunun çalışması için gereklidir
+using Microsoft.EntityFrameworkCore;
 
 namespace RestoFlow.API.Controllers
 {
-    // Dış dünyadan (Swagger veya Garson Tabletinden) gelen isteklerin
-    // "http://localhost:5000/api/tables" adresine yönlendirilmesini sağlar.
     [Route("api/[controller]")]
-
-    // Bu sınıfın bir API kumandası olduğunu belirtir (Gelen hatalı verileri otomatik engeller).
     [ApiController]
+    [Authorize] // Tüm masa işlemleri artık Token (Yaka kartı) istiyor.
     public class TablesController : ControllerBase
     {
-        // ==========================================
-        // ASİSTANLAR (Bağımlılıklar)
-        // ==========================================
-
-        // Veritabanındaki 'Tables' tablosuna yeni bir satır eklemek veya okumak için kullanacağımız depo.
         private readonly IGenericRepository<Table> _tableRepository;
-
-        // Yapılan değişiklikleri (kayıtları) veritabanına tek seferde "kalıcı" olarak kaydetmek (Commit) için araç.
         private readonly IUnitOfWork _unitOfWork;
 
-        // Dependency Injection (Bağımlılık Enjeksiyonu): 
-        // Sistem çalışırken (uygulama ayağa kalkarken) bu asistanları Controller'a otomatik olarak tahsis eder.
-        public TablesController(IGenericRepository<Table> tableRepository, IUnitOfWork unitOfWork)
+        // ==========================================
+        // YENİ ASİSTANIMIZ (Saha Haritası Beyni)
+        // ==========================================
+        private readonly ITableService _tableService;
+
+        // Constructor'a 3. asistanı da ekledik
+        public TablesController(
+            IGenericRepository<Table> tableRepository,
+            IUnitOfWork unitOfWork,
+            ITableService tableService)
         {
             _tableRepository = tableRepository;
             _unitOfWork = unitOfWork;
+            _tableService = tableService;
         }
 
         // ==========================================
-        // 1. YENİ MASA EKLEME UCU (ENDPOINT)
+        // 1. YENİ MASA EKLEME UCU (Mevcut Kodun)
         // ==========================================
-        // [HttpPost]: Dışarıdan sistemimize "Yeni bir veri gönderileceği/yazılacağı" zaman kullanılır.
-        // Garson veya patron tabletten "Masa Ekle" butonuna bastığında bu metot tetiklenir.
         [HttpPost("add")]
+        [Authorize(Policy = Permissions.Administration.ManageLayout)] // SADECE PATRON/YÖNETİCİ MASA EKLEYEBİLİR!
         public async Task<IActionResult> AddTable(string tableNumber, int capacity)
         {
-            // Gelen bilgilere göre C# hafızasında yeni bir masa objesi (taslağı) oluşturuyoruz.
             var table = new Table
             {
-                TableNumber = tableNumber, // Örn: "Masa-1" veya "VIP-Odasi"
-                Capacity = capacity,       // Örn: 4 (kişilik)
-
-                // Sisteme ilk kez eklenen bir masa fiziksel olarak boş demektir.
-                // Bu yüzden durumunu varsayılan olarak "Empty" (Yeşil/Boş) olarak ayarlıyoruz.
+                TableNumber = tableNumber,
+                Capacity = capacity,
                 Status = Core.Concretes.Enums.TableStatus.Empty
             };
 
-            // Hazırladığımız bu masa taslağını veritabanı deposuna ekliyoruz.
             await _tableRepository.AddAsync(table);
-
-            // Ve 'UnitOfWork' ile değişiklikleri SQLite dosyasına kalıcı olarak yazıyoruz.
             await _unitOfWork.SaveChangesAsync();
 
-            // İşlem başarılı olursa, dış dünyaya "200 OK" koduyla birlikte bilgi mesajı dönüyoruz.
-            // Ayrıca oluşturulan masanın veritabanındaki matematiksel ID'sini (TableId) de veriyoruz.
             return Ok(new { Message = $"{tableNumber} başarıyla sisteme eklendi.", TableId = table.Id });
         }
 
         // ==========================================
-        // 2. TÜM MASALARI LİSTELEME UCU (ENDPOINT)
+        // 2. TÜM MASALARI LİSTELEME UCU (Mevcut Kodun)
         // ==========================================
-        // [HttpGet]: Sistemden "Veri okumak / listelemek" istediğimizde kullanılır.
-        // Ana ekranda restoranın krokisini çizerken tüm masaları getirmek için bu metot çalışır.
         [HttpGet("get-all")]
         public async Task<IActionResult> GetAllTables()
         {
-            // Masalar deposuna gidip, içerideki tüm kayıtları (GetAll) çekip bir listeye (ToListAsync) dönüştürüyoruz.
             var tables = await _tableRepository.GetAll().ToListAsync();
-
-            // Bulunan listeyi dış dünyaya (Ekrana / Swagger'a) gönderiyoruz.
             return Ok(tables);
+        }
+
+        // ====================================================================
+        // 3. SAHA HARİTASI (TABLE DASHBOARD) UCU - YENİ EKLENEN
+        // ====================================================================
+        // Garson tableti açtığında veya sayfayı yenilediğinde çalışan uç.
+        [HttpGet("dashboard")]
+        public async Task<IActionResult> GetDashboard()
+        {
+            var result = await _tableService.GetTableDashboardAsync();
+
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+
+            return BadRequest(result);
         }
     }
 }

@@ -19,7 +19,7 @@ namespace Data.Seeds
             // Tanımladığımız her bir rol için veritabanında olup olmadığını kontrol edeceğiz.
             foreach (var roleName in roleNames)
             {
-                // Eğer rol veritabanında (AspNetRoles tablosu) yoksa oluştur
+                // Eğer rol veritabanında (AspNetRoles tablosu) yoksa oluşxtur
                 if (!await roleManager.RoleExistsAsync(roleName))
                 {
                     // Yeni bir IdentityRole nesnesi yaratıp veritabanına kaydediyoruz.

@@ -47,5 +47,10 @@ namespace Core.Concretes.Entities
 
         // Bu adisyonun içindeki sipariş satırları (Hamburgerler, Kolalar vb.)
         public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
+        // Masanın şu ana kadar ödediği toplam miktar (Kısmi ödemeler için hayati önem taşır)
+        public decimal PaidAmount { get; set; } = 0;
+
+        // Bu adisyona yapılmış tüm parçalı ödemelerin geçmiş listesi
+        public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
     }
 }

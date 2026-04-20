@@ -26,5 +26,9 @@ namespace Business.Abstracts
         Task<IResult> AddItemsToOrderAsync(AddItemsToOrderDto addItemsDto);
         // Kasada siparişe (Adisyona) manuel indirim uygular.
         Task<IResult> ApplyDiscountAsync(int orderId, decimal discountAmount);
+        // Müşteriyi ve adisyonu bir masadan başka bir masaya taşır
+        Task<IResult> TransferTableAsync(TransferTableDto transferDto);
+        // Adisyondan hatalı girilen veya iptal edilen tek bir ürün satırını siler
+        Task<IResult> RemoveItemFromOrderAsync(int orderId, int orderItemId);
     }
 }

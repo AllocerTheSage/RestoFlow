@@ -109,7 +109,7 @@ namespace Business.Concretes
 
             // 5. ADIM: SİSTEM GÜNLÜĞÜ (LOG) OLUŞTURMA
             // [DEĞİŞTİ]: Loglamada artık TableNumber yerine TableId kullanıyoruz ki tam izlenebilirlik sağlansın.
-            _logger.LogInformation("YENİ SİPARİŞ! Adisyon: {OrderNo}, Masa ID: {TableId}, Tutar: {Total} TL, Garson: {WaiterId}",
+            _logger.LogInformation("YENİ SİPARİŞ! Adisyon: {OrderNumber}, Masa ID: {TableId}, Tutar: {Total} TL, Garson: {WaiterId}",
                 order.OrderNumber, order.TableId, order.TotalPrice, waiterId);
 
             return new SuccessResult($"Sipariş başarıyla mutfağa iletildi. Fiş No: {order.OrderNumber}");
@@ -239,7 +239,7 @@ namespace Business.Concretes
 
             // 5. ADIM: SİSTEM GÜNLÜĞÜ (LOG)
             // Muhasebe veya patron için "Şu masadan şu kadar para alındı" diye kalıcı not düşüyoruz.
-            _logger.LogInformation("ÖDEME ALINDI! Sipariş No: {OrderNo}, Boşalan Masa ID: {TableId}, Kasa Girişi: {TotalPrice} TL",
+            _logger.LogInformation("ÖDEME ALINDI! Sipariş No: {OrderNumber}, Boşalan Masa ID: {TableId}, Kasa Girişi: {TotalPrice} TL",
                 order.OrderNumber, order.TableId, order.TotalPrice);
 
             // Kasiyere / Garsona işlemin başarıyla bittiğini haber veriyoruz.
@@ -460,7 +460,7 @@ namespace Business.Concretes
             await _unitOfWork.SaveChangesAsync();
 
             // Patron için arkada bir iz bırakıyoruz.
-            _logger.LogInformation("EK SİPARİŞ GİRİLDİ: {OrderNo} nolu masaya {Amount} TL değerinde ilave yapıldı.",
+            _logger.LogInformation("EK SİPARİŞ GİRİLDİ: {OrderNumber} nolu masaya {Amount} TL değerinde ilave yapıldı.",
                 order.OrderNumber, additionalPrice);
 
             return new SuccessResult("Ek siparişler başarıyla eklendi ve mutfağa iletildi.");
@@ -503,10 +503,139 @@ namespace Business.Concretes
             await _unitOfWork.SaveChangesAsync();
 
             // Arka planda patron için log bırakıyoruz.
-            _logger.LogInformation("İNDİRİM YAPILDI: {OrderNo} nolu adisyona {Discount} TL indirim uygulandı. Yeni Tutar: {Total} TL",
+            _logger.LogInformation("İNDİRİM YAPILDI: {OrderNumber} nolu adisyona {Discount} TL indirim uygulandı. Yeni Tutar: {Total} TL",
                 order.OrderNumber, discountAmount, order.TotalPrice);
 
             return new SuccessResult($"İndirim başarıyla uygulandı. Ödenecek yeni tutar: {order.TotalPrice} TL");
+        }
+        // ==========================================
+        // OPERASYON: MASA TAŞIMA (TABLE TRANSFER)
+        // ==========================================
+        public async Task<IResult> TransferTableAsync(TransferTableDto transferDto)
+        {
+            // 1. ADIM: MEVCUT ADİSYONU BUL VE KONTROL ET
+            var order = await _orderRepository.GetByIdAsync(transferDto.OrderId);
+
+            if (order == null)
+            {
+                return new ErrorResult("Taşınmak istenen sipariş/adisyon bulunamadı.");
+            }
+
+            // [GÜVENLİK DUVARI 1]: Sadece aktif (açık) olan masalar taşınabilir.
+            if (order.Status == OrderStatus.Completed || order.Status == OrderStatus.Canceled)
+            {
+                return new ErrorResult("Kapanmış veya iptal edilmiş bir adisyon başka masaya taşınamaz.");
+            }
+
+            // 2. ADIM: HEDEF MASAYI (YENİ MASAYI) KONTROL ET
+            // Müşterinin geçmek istediği yeni masayı veritabanından çekiyoruz.
+            var newTable = await _tableRepository.GetByIdAsync(transferDto.NewTableId);
+
+            if (newTable == null)
+            {
+                return new ErrorResult("Hedef masa bulunamadı.");
+            }
+
+            // [GÜVENLİK DUVARI 2]: Hedef masa BOŞ olmak zorunda! Dolu masaya veya rezerve masaya müşteri oturtamayız.
+            // (Üst üste müşteri oturmasını engeller)
+            if (newTable.Status == TableStatus.Occupied)
+            {
+                return new ErrorResult("Hedef masa şu an dolu! Lütfen boş bir masa seçin.");
+            }
+            if (newTable.Status == TableStatus.Reserved)
+            {
+                return new ErrorResult("Hedef masa şu an rezerve! Lütfen boş bir masa seçin.");
+            }
+
+            // 3. ADIM: ESKİ MASAYI BUL VE BOŞALT (YEŞİL YAP)
+            // Adisyonun şu anki masasını buluyoruz ve üzerindeki "Dolu" tabelasını kaldırıyoruz.
+            var oldTable = await _tableRepository.GetByIdAsync(order.TableId);
+            if (oldTable != null)
+            {
+                oldTable.Status = TableStatus.Empty;
+                _tableRepository.Update(oldTable);
+            }
+
+            // 4. ADIM: ADİSYONU YENİ MASAYA BAĞLA VE YENİ MASAYI DOLDUR (KIRMIZI YAP)
+            // Fişin üzerindeki eski masa numarasını silip, yeni masanın ID'sini yazıyoruz.
+            order.TableId = transferDto.NewTableId;
+            _orderRepository.Update(order);
+
+            // Yeni masanın üzerine "Dolu" tabelasını asıyoruz.
+            newTable.Status = TableStatus.Occupied;
+            _tableRepository.Update(newTable);
+
+            // 5. ADIM: TÜM DEĞİŞİKLİKLERİ TEK SEFERDE VERİTABANINA KAYDET (COMMIT)
+            // 3 farklı tablodaki değişiklik tek bir hamleyle kaydedilir.
+            await _unitOfWork.SaveChangesAsync();
+
+            // Arka planda log defterine not düşüyoruz (Kim, nereden nereye geçti?)
+            _logger.LogInformation("MASA TAŞINDI: {OrderNumber} numaralı adisyon, Masa ID {OldTableId} konumundan Masa ID {NewTableId} konumuna taşındı.",
+                order.OrderNumber, oldTable?.Id, newTable.Id);
+
+            return new SuccessResult($"{oldTable.TableNumber} Adisyonu {newTable.TableNumber} tarafına başarı ile taşındı!.");
+        }
+        // ==========================================
+        // ADİSYONDAN ÜRÜN SİLME (CERRAHİ OPERASYON)
+        // ==========================================
+        public async Task<IResult> RemoveItemFromOrderAsync(int orderId, int orderItemId)
+        {
+            // 1. ADIM: SİLİNECEK ÜRÜNÜ BUL (Ve bağlı olduğu Product bilgisini de peşine tak)
+            // Sadece OrderItem tablosundan silmek yetmez, ürünün stoğuna ve IsReturnable durumuna
+            // bakacağımız için ".Include(oi => oi.Product)" yapıyoruz.
+            var orderItem = await _orderItemRepository.GetAll()
+                .Include(oi => oi.Product)
+                .FirstOrDefaultAsync(x => x.Id == orderItemId && x.OrderId == orderId);
+
+            // Eğer öyle bir ürün o masada yoksa işlemi durdur.
+            if (orderItem == null)
+            {
+                return new ErrorResult("Silinmek istenen ürün bu adisyonda bulunamadı.");
+            }
+
+            // 2. ADIM: BAĞLI OLDUĞU ADİSYONU BUL VE GÜVENLİK KONTROLÜ YAP
+            var order = await _orderRepository.GetByIdAsync(orderId);
+
+            if (order == null || order.Status == OrderStatus.Completed || order.Status == OrderStatus.Canceled)
+            {
+                return new ErrorResult("Kapanmış veya iptal edilmiş adisyonlardan ürün silinemez!");
+            }
+
+            // 3. ADIM: AKILLI STOK İADESİ (Senin Tasarımın)
+            // Eğer mutfak bu ürünü hazırlamışsa ve stok çoktan düşmüşse...
+            if (orderItem.IsStockDecreased)
+            {
+                // ...ve eğer bu ürün dolaba geri konabilen bir ürünse (Örn: Kutu Kola)
+                if (orderItem.Product.IsReturnable)
+                {
+                    // Stoğu dolaba geri koyuyoruz.
+                    orderItem.Product.StockQuantity += orderItem.Quantity;
+                    _productRepository.Update(orderItem.Product);
+                }
+                // (Eğer IsReturnable 'false' ise, yani pişen bir hamburgerse bu 'if' bloğuna girmez. 
+                // Stok düştüğüyle kalır ve ürün zararına yazılır.)
+            }
+
+            // 4. ADIM: ADİSYON TOPLAM FİYATINI DÜŞÜRME
+            // Eğer bu ürün daha önceden "İkram" olarak işaretlenmediyse (ikramsa parası zaten sıfırlanmıştır),
+            // ürünün tutarını faturadan düşüyoruz.
+            if (!orderItem.IsComplimentary)
+            {
+                order.TotalPrice -= (orderItem.UnitPrice * orderItem.Quantity);
+            }
+
+            // 5. ADIM: SATIRI SİL VE KAYDET (COMMIT)
+            // Ürünü masadan fiziken siliyoruz ve güncellenen fatura tutarını kaydediyoruz.
+            _orderItemRepository.Delete(orderItem);
+            _orderRepository.Update(order);
+
+            await _unitOfWork.SaveChangesAsync();
+
+            // Patron için arka planda iz bırakıyoruz.
+            _logger.LogInformation("ÜRÜN SİLİNDİ: {OrderNumber} nolu adisyondan {Quantity} adet {ProductName} çıkarıldı.",
+                order.OrderNumber, orderItem.Quantity, orderItem.Product.Name);
+
+            return new SuccessResult("Ürün adisyondan başarıyla silindi. Fiyat (ve gerekliyse stok) güncellendi.");
         }
     }
 }

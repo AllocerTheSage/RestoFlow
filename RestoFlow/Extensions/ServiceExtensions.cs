@@ -48,6 +48,8 @@ namespace WebAPI.Extensions
             services.AddScoped<IProductService, ProductManager>();
             services.AddScoped<IAuthService, AuthManager>();
             services.AddScoped<IOrderService, OrderManager>();
+            services.AddScoped<ITableService, TableManager>();
+            services.AddScoped<IPaymentService, PaymentManager>();
 
             // ====================================================================
             // 3. AUTOMAPPER KAYDI (Veri Taşıyıcıları)
