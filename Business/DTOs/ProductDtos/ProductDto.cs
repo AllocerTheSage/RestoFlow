@@ -8,5 +8,7 @@
         public int StockQuantity { get; set; } 
         public bool IsActive { get; set; }
         public bool IsReturnable { get; set; } = false;
+
+        // - Berkan Eren
     }
 }
