@@ -45,7 +45,9 @@ namespace Business.Concretes
 
             if (result.Succeeded)
             {
-                return new SuccessResult("Kullanıcı başarıyla kaydedildi.");
+                await _userManager.AddToRoleAsync(user, "Member");
+
+                return new SuccessResult("Kayıt başarılı. Artık giriş yapabilirsiniz.");
             }
 
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
@@ -125,6 +127,76 @@ namespace Business.Concretes
                 signingCredentials: credentials);
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+        // 1. TÜM PERSONELLERİ GETİR
+        public async Task<IDataResult<List<UserListDto>>> GetAllUsersAsync()
+        {
+            var users = _userManager.Users.ToList();
+            var userList = new List<UserListDto>();
+
+            foreach (var user in users)
+            {
+                var roles = await _userManager.GetRolesAsync(user);
+                var claims = await _userManager.GetClaimsAsync(user);
+
+                userList.Add(new UserListDto
+                {
+                    Id = user.Id,
+                    FullName = $"{user.FirstName} {user.LastName}".Trim(),
+                    UserName = user.UserName ?? "",
+                    Email = user.Email ?? "",
+                    Role = roles.FirstOrDefault() ?? "Member", // Varsayılan rol
+                    Claims = claims.Select(c => c.Value).ToList() // Kullanıcının özel yetkileri
+                });
+            }
+
+            return new SuccessDataResult<List<UserListDto>>(userList, "Personeller başarıyla listelendi.");
+        }
+
+        // 2. YETKİ VE ROL GÜNCELLE
+        public async Task<IResult> UpdateUserPermissionsAsync(UpdatePermissionDto updateDto)
+        {
+            var user = await _userManager.FindByIdAsync(updateDto.UserId);
+            if (user == null) return new ErrorResult("Personel bulunamadı.");
+
+            // A) Mevcut Rolleri Temizle ve Yeni Rolü Ekle
+            var currentRoles = await _userManager.GetRolesAsync(user);
+            await _userManager.RemoveFromRolesAsync(user, currentRoles);
+
+            if (!string.IsNullOrEmpty(updateDto.Role))
+            {
+                // Rol veritabanında yoksa oluştur (Opsiyonel güvenlik)
+                if (!await _roleManager.RoleExistsAsync(updateDto.Role))
+                {
+                    await _roleManager.CreateAsync(new IdentityRole(updateDto.Role));
+                }
+                await _userManager.AddToRoleAsync(user, updateDto.Role);
+            }
+
+            // B) Mevcut Ekstra Yetkileri (Claims) Temizle ve Yenilerini Ekle
+            var currentClaims = await _userManager.GetClaimsAsync(user);
+            await _userManager.RemoveClaimsAsync(user, currentClaims);
+
+            // JS'den gelen yetkileri (örn: "CancelOrder") veritabanına Claim olarak işle
+            var newClaims = updateDto.Claims.Select(claimValue => new Claim("Permission", claimValue)).ToList();
+            await _userManager.AddClaimsAsync(user, newClaims);
+
+            return new SuccessResult("Personel yetkileri başarıyla güncellendi.");
+        }
+
+        // 3. PERSONEL SİL
+        public async Task<IResult> DeleteUserAsync(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return new ErrorResult("Personel zaten silinmiş veya bulunamadı.");
+
+            var result = await _userManager.DeleteAsync(user);
+            if (result.Succeeded)
+            {
+                return new SuccessResult("Personel sistemden tamamen silindi.");
+            }
+
+            return new ErrorResult("Personel silinirken bir hata oluştu.");
         }
     }
 }

@@ -10,5 +10,8 @@ namespace Business.Abstracts
 
         // Kullanıcı giriş işlemi (Başarılı olursa geriye string olarak Token döner)
         Task<IDataResult<string>> LoginAsync(LoginDto loginDto);
+        Task<IDataResult<List<UserListDto>>> GetAllUsersAsync();
+        Task<IResult> UpdateUserPermissionsAsync(UpdatePermissionDto updateDto);
+        Task<IResult> DeleteUserAsync(string userId);
     }
 }

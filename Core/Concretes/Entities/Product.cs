@@ -6,6 +6,7 @@ namespace Core.Concretes.Entities
     {
         public string Name { get; set; } = string.Empty;
         public decimal Price { get; set; }
+        public string? Description { get; set; }
         public int StockQuantity { get; set; } 
 
         // MUTFAK İÇİN: Ürünü manuel olarak satışa kapatıp açmaya yarar.

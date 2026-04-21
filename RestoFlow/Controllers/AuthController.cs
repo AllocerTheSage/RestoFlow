@@ -71,5 +71,32 @@ namespace WebAPI.Controllers
             // Bu, "Bu kapıdan geçmek için geçerli bir kimliğin yok" demektir.
             return Unauthorized(result);
         }
+        // Personelleri Listeleme Ucu
+        [HttpGet("users")]
+        // [Authorize(Roles = "Admin")] // İleride sadece Adminler görebilsin diye burayı açabiliriz.
+        public async Task<IActionResult> GetAllUsers()
+        {
+            var result = await _authService.GetAllUsersAsync();
+            if (result.Success) return Ok(result);
+            return BadRequest(result);
+        }
+
+        // Yetki Güncelleme Ucu
+        [HttpPost("update-permissions")]
+        public async Task<IActionResult> UpdatePermissions([FromBody] UpdatePermissionDto updateDto)
+        {
+            var result = await _authService.UpdateUserPermissionsAsync(updateDto);
+            if (result.Success) return Ok(result);
+            return BadRequest(result);
+        }
+
+        // Personel Silme Ucu
+        [HttpDelete("delete-user/{id}")]
+        public async Task<IActionResult> DeleteUser(string id)
+        {
+            var result = await _authService.DeleteUserAsync(id);
+            if (result.Success) return Ok(result);
+            return BadRequest(result);
+        }
     }
 }
