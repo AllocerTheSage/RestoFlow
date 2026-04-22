@@ -11,6 +11,6 @@ namespace Core.Concretes.Entities
 
         // MUTFAK İÇİN: Ürünü manuel olarak satışa kapatıp açmaya yarar.
         public bool IsActive { get; set; } = true;
-        public bool IsReturnable { get; set; } = false;
+        public bool IsReturnable { get; set; } = false; //
     }
 }
