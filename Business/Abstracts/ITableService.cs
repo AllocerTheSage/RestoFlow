@@ -5,7 +5,11 @@ namespace Business.Abstracts
 {
     public interface ITableService
     {
-        // Tüm masaları, o anki durumları ve (eğer varsa) açık hesap tutarlarıyla birlikte getirir.
         Task<IDataResult<List<TableDto>>> GetTableDashboardAsync();
+
+        // EKLENEN YENİ METOTLAR
+        Task<IResult> UpdateTableAsync(TableUpdateDto updateDto);
+        Task<IResult> DeleteTableAsync(int id);
+        Task<IResult> CreateTableAsync(TableCreateDto createDto);
     }
 }

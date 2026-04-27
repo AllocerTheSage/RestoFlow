@@ -21,7 +21,8 @@ namespace Data.Contexts
         // Diğer DbSet tanımlarının (Products, Orders vb.) yanına bunu ekliyoruz:
 
         public DbSet<Table> Tables { get; set; }
-
+        public DbSet<TableCategory> TableCategories { get; set; }
+        
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);

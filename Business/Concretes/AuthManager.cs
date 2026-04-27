@@ -83,11 +83,18 @@ namespace Business.Concretes
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
             // 1. Temel Kimlik Bilgilerini Listeye Ekle
+            // AuthManager.cs içindeki GenerateJwtTokenAsync metodunun ilgili kısmı:
+
+            // 1. Temel Kimlik Bilgilerini Listeye Ekle
             var claims = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.UserName),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(ClaimTypes.NameIdentifier, user.Id)
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                
+                // İŞTE EKSİK OLAN SİHİRLİ SATIR BURASI!
+                // Kullanıcının Adını ve Soyadını birleştirip Token'ın içine "Name" etiketiyle mühürlüyoruz.
+                new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}")
             };
 
             // ==============================================================

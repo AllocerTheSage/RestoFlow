@@ -3,6 +3,7 @@ using System;
 using Data.Contexts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260427120556_AddTableCategory")]
+    partial class AddTableCategory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.25");
@@ -294,8 +297,9 @@ namespace Data.Migrations
                     b.Property<int>("Capacity")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("CategoryId")
-                        .HasColumnType("INTEGER");
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("TEXT");
@@ -321,43 +325,7 @@ namespace Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CategoryId");
-
                     b.ToTable("Tables");
-                });
-
-            modelBuilder.Entity("Core.Concretes.Entities.TableCategory", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("UpdatedDate")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("TableCategories");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -529,17 +497,6 @@ namespace Data.Migrations
                     b.Navigation("Order");
                 });
 
-            modelBuilder.Entity("Core.Concretes.Entities.Table", b =>
-                {
-                    b.HasOne("Core.Concretes.Entities.TableCategory", "Category")
-                        .WithMany("Tables")
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Category");
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -601,11 +558,6 @@ namespace Data.Migrations
             modelBuilder.Entity("Core.Concretes.Entities.Table", b =>
                 {
                     b.Navigation("Orders");
-                });
-
-            modelBuilder.Entity("Core.Concretes.Entities.TableCategory", b =>
-                {
-                    b.Navigation("Tables");
                 });
 #pragma warning restore 612, 618
         }
