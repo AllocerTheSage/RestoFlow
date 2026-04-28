@@ -9,7 +9,7 @@ namespace RestoFlow.Controllers
     [Route("api/[controller]")]
     [ApiController]
     // Tüm kategori işlemleri varsayılan olarak Admin yetkisi gerektirir.
-    [Authorize(Policy = Permissions.Administration.ManageLayout)]
+    [Authorize(Roles = "Admin")]
     public class TableCategoriesController : ControllerBase
     {
         private readonly ITableCategoryService _categoryService;

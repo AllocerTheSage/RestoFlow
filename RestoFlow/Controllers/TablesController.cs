@@ -37,7 +37,7 @@ namespace RestoFlow.API.Controllers
         // 1. YENİ MASA EKLEME UCU (Mevcut Kodun)
         // ==========================================
         [HttpPost("add")]
-        [Authorize(Policy = Permissions.Administration.ManageLayout)] // SADECE PATRON/YÖNETİCİ MASA EKLEYEBİLİR!
+        [Authorize(Roles = "Admin")] // SADECE PATRON/YÖNETİCİ MASA EKLEYEBİLİR!
         public async Task<IActionResult> AddTable(string tableNumber, int capacity)
         {
             var table = new Table
@@ -79,5 +79,7 @@ namespace RestoFlow.API.Controllers
 
             return BadRequest(result);
         }
+
+            
     }
 }
