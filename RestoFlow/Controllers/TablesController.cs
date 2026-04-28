@@ -1,35 +1,20 @@
 ﻿using Business.Abstracts;
-using Core.Abstracts;
-using Core.Abstracts.IRepositories;
-using Core.Concretes.Entities;
-using Core.Constants; // Yetki kilidimiz için gerekli
-using Microsoft.AspNetCore.Authorization; // [Authorize] için gerekli
+using Business.DTOs.TableDtos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace RestoFlow.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize] // Tüm masa işlemleri artık Token (Yaka kartı) istiyor.
+    [Authorize] // Bu controller'a sadece sisteme giriş yapmış personeller erişebilir
     public class TablesController : ControllerBase
     {
-        private readonly IGenericRepository<Table> _tableRepository;
-        private readonly IUnitOfWork _unitOfWork;
-
-        // ==========================================
-        // YENİ ASİSTANIMIZ (Saha Haritası Beyni)
-        // ==========================================
         private readonly ITableService _tableService;
 
-        // Constructor'a 3. asistanı da ekledik
-        public TablesController(
-            IGenericRepository<Table> tableRepository,
-            IUnitOfWork unitOfWork,
-            ITableService tableService)
+        // Bütün işi akıllı yöneticimiz (TableManager) yapacağı için sadece onu içeri alıyoruz.
+        public TablesController(ITableService tableService)
         {
-            _tableRepository = tableRepository;
-            _unitOfWork = unitOfWork;
             _tableService = tableService;
         }
 
@@ -37,46 +22,50 @@ namespace RestoFlow.API.Controllers
         // 1. YENİ MASA EKLEME UCU (Mevcut Kodun)
         // ==========================================
         [HttpPost("add")]
-        [Authorize(Roles = "Admin")] // SADECE PATRON/YÖNETİCİ MASA EKLEYEBİLİR!
+        [Authorize(Policy = Permissions.Administration.ManageLayout)] // SADECE PATRON/YÖNETİCİ MASA EKLEYEBİLİR!
         public async Task<IActionResult> AddTable(string tableNumber, int capacity)
         {
-            var table = new Table
-            {
-                TableNumber = tableNumber,
-                Capacity = capacity,
-                Status = Core.Concretes.Enums.TableStatus.Empty
-            };
-
-            await _tableRepository.AddAsync(table);
-            await _unitOfWork.SaveChangesAsync();
-
-            return Ok(new { Message = $"{tableNumber} başarıyla sisteme eklendi.", TableId = table.Id });
-        }
-
-        // ==========================================
-        // 2. TÜM MASALARI LİSTELEME UCU (Mevcut Kodun)
-        // ==========================================
-        [HttpGet("get-all")]
-        public async Task<IActionResult> GetAllTables()
-        {
-            var tables = await _tableRepository.GetAll().ToListAsync();
-            return Ok(tables);
-        }
-
-        // ====================================================================
-        // 3. SAHA HARİTASI (TABLE DASHBOARD) UCU - YENİ EKLENEN
-        // ====================================================================
-        // Garson tableti açtığında veya sayfayı yenilediğinde çalışan uç.
-        [HttpGet("dashboard")]
-        public async Task<IActionResult> GetDashboard()
-        {
             var result = await _tableService.GetTableDashboardAsync();
+            if (result.Success) return Ok(result);
+            return BadRequest(result);
+        }
 
-            if (result.Success)
-            {
-                return Ok(result);
-            }
+        // ====================================================================
+        // 2. YENİ MASA EKLEME
+        // ====================================================================
+        // POST: api/Tables/create
+        [HttpPost("create")]
+        [Authorize(Roles = "Admin")] // Sadece Admin olanlar masa ekleyebilir
+        public async Task<IActionResult> CreateTable([FromBody] TableCreateDto createDto)
+        {
+            var result = await _tableService.CreateTableAsync(createDto);
+            if (result.Success) return Ok(result);
+            return BadRequest(result);
+        }
 
+        // ====================================================================
+        // 3. MASA BİLGİLERİNİ GÜNCELLEME
+        // ====================================================================
+        // PUT: api/Tables/update
+        [HttpPut("update")]
+        [Authorize(Roles = "Admin")] // Sadece Admin olanlar masayı düzenleyebilir
+        public async Task<IActionResult> UpdateTable([FromBody] TableUpdateDto updateDto)
+        {
+            var result = await _tableService.UpdateTableAsync(updateDto);
+            if (result.Success) return Ok(result);
+            return BadRequest(result);
+        }
+
+        // ====================================================================
+        // 4. MASA SİLME
+        // ====================================================================
+        // DELETE: api/Tables/delete/5
+        [HttpDelete("delete/{id}")]
+        [Authorize(Roles = "Admin")] // Sadece Admin olanlar masayı silebilir
+        public async Task<IActionResult> DeleteTable(int id)
+        {
+            var result = await _tableService.DeleteTableAsync(id);
+            if (result.Success) return Ok(result);
             return BadRequest(result);
         }
 
