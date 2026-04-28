@@ -366,3 +366,8 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/RestoFlow/AdisyonDb.db-shm
+/RestoFlow/AdisyonDb.db-wal
+/RestoFlow/AdisyonDb.db
+/.gitignore
+/.gitignore
