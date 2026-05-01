@@ -29,9 +29,12 @@ namespace Core.Concretes.Entities
         // doğrudan "order.Table.Capacity" yazarak o masanın kaç kişilik olduğunu öğrenebileceğiz.
         public virtual Table Table { get; set; }
         // ==========================================
-
         // Siparişi alan garsonun kimliği (Token'dan geliyor)
-        public string WaiterId { get; set; } = string.Empty;
+        public string? WaiterId { get; set; }
+
+        // YENİ EKLENDİ: Veritabanında AppUser (Garson/Kullanıcı) tablosuna giden köprü
+        [System.ComponentModel.DataAnnotations.Schema.ForeignKey("WaiterId")]
+        public virtual AppUser? AppUser { get; set; }
 
         // Adisyonun toplam tutarı
         public decimal TotalPrice { get; set; } = 0;

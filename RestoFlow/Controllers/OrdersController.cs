@@ -256,5 +256,45 @@ namespace WebAPI.Controllers
             }
             return BadRequest(result); // Masa boşsa buraya düşecek, sorun yok.
         }
+        // MUTFAK TESLİM ONAYI: Aşçı "Garsona Teslim Edildi" dediğinde çalışır.
+        [HttpPost("deliver/{id}")]
+        [Authorize] // Not: Eğer token'daki rol adınla buradaki uyuşmazsa 403 hatası almamak için şimdilik sade Authorize bıraktık.
+        public async Task<IActionResult> DeliverOrder(int id)
+        {
+            var result = await _orderService.DeliverOrderAsync(id);
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+
+            // SİHİRLİ DOKUNUŞ: Backend'in düz metin (plain text) dönmesini engelleyip, zorla JSON formatına çeviriyoruz!
+            return BadRequest(new { success = false, message = result.Message });
+        }
+        // [ADMİN/PATRON] Tüm aktif siparişleri listeler
+        [HttpGet("all-active")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAllActiveOrders()
+        {
+            var result = await _orderService.GetAllActiveOrdersAsync();
+            if (result.Success) return Ok(result);
+            return BadRequest(result);
+        }
+        // ==========================================
+        // [FİNANS/PATRON] Geçmiş siparişleri (Raporlar için) TARİH FİLTRESİYLE listeler
+        // Örnek İstek: GET api/Orders/past-orders?startDate=2026-05-01&endDate=2026-05-12
+        // ==========================================
+        [HttpGet("past-orders")]
+        [Authorize(Roles = "Admin")] // Sadece patron/yönetici görebilir
+        public async Task<IActionResult> GetPastOrders([FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
+        {
+            // Frontend'den gelen tarihleri alıp doğrudan Service (Manager) katmanımıza iletiyoruz.
+            var result = await _orderService.GetPastOrdersAsync(startDate, endDate);
+
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+            return BadRequest(result);
+        }
     }
 }

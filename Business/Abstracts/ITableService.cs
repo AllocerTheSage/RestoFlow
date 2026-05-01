@@ -11,5 +11,6 @@ namespace Business.Abstracts
         Task<IResult> UpdateTableAsync(TableUpdateDto updateDto);
         Task<IResult> DeleteTableAsync(int id);
         Task<IResult> CreateTableAsync(TableCreateDto createDto);
+        Task<IResult> ToggleReservationAsync(int tableId);
     }
 }

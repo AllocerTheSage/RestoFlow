@@ -86,6 +86,17 @@ namespace RestoFlow.API.Controllers
             return BadRequest(result);
         }
 
-            
+        // ====================================================================
+        // 5. MASA REZERVASYON AÇ/KAPAT (Garsonlar da kullanabilir)
+        // ====================================================================
+        // POST: api/Tables/toggle-reservation/5
+        [HttpPost("toggle-reservation/{id}")]
+        [Authorize] // Sadece giriş yapmış personel (garson dahil) yapabilir
+        public async Task<IActionResult> ToggleReservation(int id)
+        {
+            var result = await _tableService.ToggleReservationAsync(id);
+            if (result.Success) return Ok(result);
+            return BadRequest(result);
+        }
     }
 }

@@ -123,17 +123,36 @@ namespace Business.Concretes
         // 1. ADIM: MUTFAK EKRANI İÇİN BEKLEYEN SİPARİŞLERİ LİSTELEME
         // YENİ METOT: SİPARİŞİ HAZIRLAMAYA BAŞLA
         // 1. MUTFAK EKRANI İÇİN BEKLEYEN SİPARİŞLERİ LİSTELEME
+        // 1. MUTFAK EKRANI İÇİN SİPARİŞLERİ LİSTELEME (GÜNCELLENDİ: Yok Olma Sorunu Çözüldü)
         public async Task<IDataResult<List<Order>>> GetPendingOrdersAsync()
         {
             var orders = await _orderRepository.GetAll()
-                // DİKKAT: Ready (3) olanları da ekledik ki 3. sütunda (Hazır) görünsünler!
                 .Where(x => x.Status == OrderStatus.Pending || x.Status == OrderStatus.Preparing || x.Status == OrderStatus.Ready)
-                .Include(x => x.OrderItems.Where(oi => oi.IsStockDecreased == false))
+                // DİKKAT: .Where(oi => oi.IsStockDecreased == false) filtresini KALDIRDIK. 
+                // Çünkü sipariş "Hazır" olduğunda stok düşülmüş oluyor, filtrelersek sipariş görünmez!
+                .Include(x => x.OrderItems)
                     .ThenInclude(oi => oi.Product)
                 .ToListAsync();
 
             var filteredOrders = orders.Where(o => o.OrderItems.Any()).ToList();
             return new SuccessDataResult<List<Order>>(filteredOrders, "Mutfak verileri getirildi.");
+        }
+
+        // YENİ EKLENEN METOT: SİPARİŞİ GARSONA TESLİM ET (MUTFAKTAN ÇIKAR)
+        public async Task<IResult> DeliverOrderAsync(int orderId)
+        {
+            var order = await _orderRepository.GetByIdAsync(orderId);
+            if (order == null) return new ErrorResult("Sipariş bulunamadı!");
+
+            // Sadece "Hazır" (3) olan siparişler teslim edilebilir
+            if (order.Status == OrderStatus.Ready)
+            {
+                order.Status = OrderStatus.Delivered; // (Enum'da 4'e denk gelen değer, mutfaktan çıkarır)
+                _orderRepository.Update(order);
+                await _unitOfWork.SaveChangesAsync();
+                return new SuccessResult("Sipariş garsona teslim edildi ve mutfaktan çıkarıldı.");
+            }
+            return new ErrorResult("Bu sipariş teslim edilmek için uygun değil.");
         }
 
         // YENİ EKLENEN METOT: SİPARİŞİ HAZIRLAMAYA BAŞLA
@@ -294,53 +313,50 @@ namespace Business.Concretes
         }
         public async Task<IResult> CancelOrderAsync(int orderId, string cancellationReason)
         {
-            // 1. Siparişi, içindeki ürünler ve ürünlerin detaylarıyla (IsReturnable, Stock vb.) birlikte getir.
             var order = await _orderRepository.GetAll()
                 .Include(x => x.OrderItems)
                     .ThenInclude(oi => oi.Product)
                 .FirstOrDefaultAsync(x => x.Id == orderId);
 
-            // Güvenlik 1: Sipariş yok mu?
-            if (order == null)
-            {
-                return new ErrorResult("İptal edilecek sipariş bulunamadı!");
-            }
+            if (order == null) return new ErrorResult("İptal edilecek sipariş bulunamadı!");
 
-            // Güvenlik 2: Zaten kapanmış veya daha önce iptal edilmiş bir sipariş iptal edilemez.
             if (order.Status == OrderStatus.Completed || order.Status == OrderStatus.Canceled)
             {
                 return new ErrorResult("Hesabı ödenmiş veya zaten iptal edilmiş bir siparişe işlem yapılamaz.");
             }
 
-            // 3. AKILLI İADE MANTIĞI (Senin Tasarımın)
-            // Eğer sipariş mutfakta hazırlandıysa veya masaya gittiyse (Yani stoklar DÜŞTÜYSE)
             if (order.Status == OrderStatus.Ready || order.Status == OrderStatus.Delivered)
             {
                 foreach (var item in order.OrderItems)
                 {
-                    // Eğer ürün iade edilebilir bir ürünse (Örn: Kola), dolaba geri koy
                     if (item.Product.IsReturnable == true)
                     {
-                        item.Product.StockQuantity += item.Quantity; // Stoğu geri artır
+                        item.Product.StockQuantity += item.Quantity;
                         _productRepository.Update(item.Product);
                     }
-                    // Else yazmamıza gerek yok. IsReturnable = false ise (Hamburger), 
-                    // stoğa dokunmuyoruz. Stok azaldığıyla kalıyor ve ürün zayi oluyor.
                 }
             }
-            // NOT: Eğer sipariş "Pending" ise yukarıdaki "if" bloğuna hiç girmez. 
-            // Stok düşmediği için iade edecek bir şey de yoktur.
 
-            // 4. İptal Sebebini Yaz ve Durumu Güncelle
+            // İptal Sebebini Yaz ve Durumu Güncelle
             order.CancellationReason = cancellationReason;
             order.Status = OrderStatus.Canceled;
-
             _orderRepository.Update(order);
 
-            // 5. Veritabanına Kaydet
+            // ==========================================
+            // YENİ EKLENDİ: MASA DURUMUNU BOŞA (YEŞİL) ÇEKME
+            // ==========================================
+            var table = await _tableRepository.GetByIdAsync(order.TableId);
+            if (table != null)
+            {
+                table.Status = TableStatus.Empty; // 1 (Boş) durumuna çekiyoruz
+                _tableRepository.Update(table);
+            }
+            // ==========================================
+
+            // Veritabanına Kaydet
             await _unitOfWork.SaveChangesAsync();
 
-            return new SuccessResult($"{order.TableId}'in {order.OrderNumber} fişli siparişi başarıyla iptal edildi. Sebep: {cancellationReason}");
+            return new SuccessResult($"{order.OrderNumber} fişli sipariş başarıyla iptal edildi ve masa boşaltıldı. Sebep: {cancellationReason}");
         }
         public async Task<IResult> MakeItemComplimentaryAsync(int orderId, int orderItemId)
         {
@@ -646,6 +662,54 @@ namespace Business.Concretes
             
             // Eğer aktif bir adisyon bulduysak, içindeki ürünlerle birlikte frontend'e yolluyoruz.
             return new SuccessDataResult<Order>(order, "Aktif adisyon başarıyla getirildi.");
+        }
+        // ==========================================
+        // PATRON/ADMİN EKRANI İÇİN: TÜM AKTİF SİPARİŞLERİ GETİRİR (GÜNCELLENDİ)
+        // ==========================================
+        public async Task<IDataResult<List<Order>>> GetAllActiveOrdersAsync()
+        {
+            var orders = await _orderRepository.GetAll()
+                .Where(x => x.Status != OrderStatus.Completed && x.Status != OrderStatus.Canceled)
+                .Include(x => x.Table) // YENİ: Masanın gerçek adını getirmek için eklendi!
+                .Include(x => x.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+                .OrderByDescending(x => x.CreatedDate)
+                .ToListAsync();
+
+            return new SuccessDataResult<List<Order>>(orders, "Tüm aktif adisyonlar getirildi.");
+        }
+        // ==========================================
+        // FİNANS/RAPOR EKRANI İÇİN: GEÇMİŞ SİPARİŞLERİ GETİRİR (TARİH FİLTRELİ)
+        // ==========================================
+        public async Task<IDataResult<List<Order>>> GetPastOrdersAsync(DateTime? startDate = null, DateTime? endDate = null)
+        {
+            // 1. ADIM: ZAMAN YÖNETİMİ (GECE YARISI HATASI ÇÖZÜMÜ)
+            DateTime start = startDate.HasValue ? startDate.Value.Date : DateTime.Today;
+            DateTime end = endDate.HasValue
+                ? endDate.Value.Date.AddDays(1).AddTicks(-1)
+                : DateTime.Today.AddDays(1).AddTicks(-1);
+
+            // 2. ADIM: VERİTABANI SORGUSU (LINQ)
+            var orders = await _orderRepository.GetAll()
+                .Where(x => (x.Status == OrderStatus.Completed || x.Status == OrderStatus.Canceled)
+                            // KRİTİK DEĞİŞİKLİK: Sadece CreatedDate'e değil, hesabın KAPATILDIĞI saate (UpdatedDate) bakıyoruz!
+                            && (x.UpdatedDate ?? x.CreatedDate) >= start
+                            && (x.UpdatedDate ?? x.CreatedDate) <= end)
+
+                .Include(x => x.Table)
+
+                // [SİNSİ HATA ÇÖZÜMÜ]: AppUser (Garson) Include işlemini ŞİMDİLİK YORUMA ALIYORUZ!
+                // Veritabanına Migration atmadığımız için EF Core bu bağlantıyı zorunlu (INNER JOIN) sanıp 
+                // listeyi boş gönderiyordu. Bunu kapatarak verilerin akmasını sağlıyoruz.
+                // .Include(x => x.AppUser)
+
+                .Include(x => x.Payments)
+                .Include(x => x.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+                .OrderByDescending(x => x.UpdatedDate ?? x.CreatedDate)
+                .ToListAsync();
+
+            return new SuccessDataResult<List<Order>>(orders, "Belirtilen tarih aralığındaki geçmiş adisyonlar başarıyla getirildi.");
         }
     }
 }

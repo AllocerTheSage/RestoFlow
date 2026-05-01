@@ -103,5 +103,33 @@ namespace Business.Concretes
 
             return new SuccessResult("Masa sistemden tamamen silindi.");
         }
+        // YENİ: Masayı tek tıkla Rezerve Et / İptal Et
+        public async Task<IResult> ToggleReservationAsync(int tableId)
+        {
+            var table = await _tableRepository.GetByIdAsync(tableId);
+            if (table == null) return new ErrorResult("Masa bulunamadı.");
+
+            // Masa doluysa müdahale ettirmiyoruz
+            if (table.Status == TableStatus.Occupied)
+            {
+                return new ErrorResult("Dolu bir masa rezerve edilemez veya rezervasyonu iptal edilemez.");
+            }
+
+            // Masa boşsa -> Rezerve yap
+            if (table.Status == TableStatus.Empty)
+            {
+                table.Status = TableStatus.Reserved;
+            }
+            // Masa rezerveyse -> Boş yap (İptal et)
+            else if (table.Status == TableStatus.Reserved)
+            {
+                table.Status = TableStatus.Empty;
+            }
+
+            _tableRepository.Update(table);
+            await _unitOfWork.SaveChangesAsync();
+
+            return new SuccessResult("Masa rezervasyon durumu başarıyla güncellendi.");
+        }
     }
 }

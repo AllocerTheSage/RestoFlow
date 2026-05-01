@@ -11,6 +11,7 @@ namespace Business.Abstracts
         // Bekleyen siparişleri mutfak ekranı için getirir
         Task<IDataResult<List<Order>>> GetPendingOrdersAsync();
         Task<IDataResult<Order>> GetActiveOrderByTableIdAsync(int tableId);
+        Task<IResult> DeliverOrderAsync(int orderId);
 
         // Siparişi "Hazır" durumuna getirir ve stoğu otomatik düşer
         Task<IResult> SetOrderReadyAsync(int orderId);
@@ -33,5 +34,9 @@ namespace Business.Abstracts
         Task<IResult> RemoveItemFromOrderAsync(int orderId, int orderItemId);
         // Siparişi hazırlık aşamasına geçirir
         Task<IResult> StartPreparationAsync(int orderId);
+        Task<IDataResult<List<Order>>> GetAllActiveOrdersAsync();
+        // Eski siparişleri getirir (örneğin, tamamlanmış veya iptal edilmiş siparişler)
+        // Dışarıdan başlangıç ve bitiş tarihi alabilen, istenmezse boş bırakılabilen (?) sözleşmemiz
+        Task<IDataResult<List<Order>>> GetPastOrdersAsync(DateTime? startDate = null, DateTime? endDate = null);
     }
 }
