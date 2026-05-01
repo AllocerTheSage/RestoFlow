@@ -121,34 +121,35 @@ namespace Business.Concretes
         // Business/Concretes/OrderManager.cs içindeki GetPendingOrdersAsync metodu:
 
         // 1. ADIM: MUTFAK EKRANI İÇİN BEKLEYEN SİPARİŞLERİ LİSTELEME
+        // YENİ METOT: SİPARİŞİ HAZIRLAMAYA BAŞLA
+        // 1. MUTFAK EKRANI İÇİN BEKLEYEN SİPARİŞLERİ LİSTELEME
         public async Task<IDataResult<List<Order>>> GetPendingOrdersAsync()
         {
             var orders = await _orderRepository.GetAll()
-
-                // Mutfak personeli sadece "Bekleyen" (Pending) veya "Hazırlanıyor" (Preparing) olan adisyonları görmeli.
-                .Where(x => x.Status == OrderStatus.Pending || x.Status == OrderStatus.Preparing)
-
-                // ==========================================
-                // [YENİ ZEKÂ - FİLTRELİ YÜKLEME]: EF Core 5.0+ Özelliği
-                // ==========================================
-                // Adisyonun içindeki sipariş satırlarını (OrderItems) getirirken HEPSİNİ getirme!
-                // Sadece IsStockDecreased == false olanları (Yani aşçının henüz mühürlemediği, yeni ürünleri) getir.
+                // DİKKAT: Ready (3) olanları da ekledik ki 3. sütunda (Hazır) görünsünler!
+                .Where(x => x.Status == OrderStatus.Pending || x.Status == OrderStatus.Preparing || x.Status == OrderStatus.Ready)
                 .Include(x => x.OrderItems.Where(oi => oi.IsStockDecreased == false))
-
-                    // O yeni satırların içinden geçip, ürün detaylarını (isim, fiyat) al.
                     .ThenInclude(oi => oi.Product)
-
                 .ToListAsync();
 
-            // ==========================================
-            // [EKSTRA GÜVENLİK DUVARI]
-            // ==========================================
-            // Filtreleme yaptıktan sonra, eğer bir adisyonun içinde "mutfağın yapacağı hiçbir ürün kalmamışsa" 
-            // (OrderItems listesi boşsa), o içi boş adisyon başlığını mutfak ekranında boşu boşuna gösterme.
-            // Sadece içinde en az 1 tane yeni iş (Any) olan masaları listeye dahil et.
             var filteredOrders = orders.Where(o => o.OrderItems.Any()).ToList();
+            return new SuccessDataResult<List<Order>>(filteredOrders, "Mutfak verileri getirildi.");
+        }
 
-            return new SuccessDataResult<List<Order>>(filteredOrders, "Mutfak ekranı sadece YENİ eklentilerle başarıyla hazırlandı.");
+        // YENİ EKLENEN METOT: SİPARİŞİ HAZIRLAMAYA BAŞLA
+        public async Task<IResult> StartPreparationAsync(int orderId)
+        {
+            var order = await _orderRepository.GetByIdAsync(orderId);
+            if (order == null) return new ErrorResult("Sipariş bulunamadı!");
+
+            if (order.Status == OrderStatus.Pending)
+            {
+                order.Status = OrderStatus.Preparing;
+                _orderRepository.Update(order);
+                await _unitOfWork.SaveChangesAsync();
+                return new SuccessResult("Sipariş hazırlık aşamasına alındı.");
+            }
+            return new ErrorResult("Bu sipariş hazırlamaya başlamak için uygun değil.");
         }
         // Siparişi "Hazır" (Ready) durumuna getirir ve stoğu otomatik düşer.
         public async Task<IResult> SetOrderReadyAsync(int orderId)

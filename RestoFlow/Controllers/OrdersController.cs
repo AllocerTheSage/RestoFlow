@@ -236,5 +236,14 @@ namespace WebAPI.Controllers
             // Hesap zaten kapalıysa, iptal edildiyse veya ürün bulunamazsa 400 Bad Request dön.
             return BadRequest(result);
         }
+        // 3. SÜTUN GEÇİŞİ: Mutfak "Hazırlamaya Başla" dediğinde çalışır.
+        [HttpPost("start-preparation/{id}")]
+        [Authorize(Policy = Permissions.Operations.ConfirmAndDeductStock)]
+        public async Task<IActionResult> StartPreparation(int id)
+        {
+            var result = await _orderService.StartPreparationAsync(id);
+            if (result.Success) return Ok(result);
+            return BadRequest(result);
+        }
     }
 }

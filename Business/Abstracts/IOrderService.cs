@@ -30,5 +30,7 @@ namespace Business.Abstracts
         Task<IResult> TransferTableAsync(TransferTableDto transferDto);
         // Adisyondan hatalı girilen veya iptal edilen tek bir ürün satırını siler
         Task<IResult> RemoveItemFromOrderAsync(int orderId, int orderItemId);
+        // Siparişi hazırlık aşamasına geçirir
+        Task<IResult> StartPreparationAsync(int orderId);
     }
 }

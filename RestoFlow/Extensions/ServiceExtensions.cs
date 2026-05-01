@@ -127,7 +127,8 @@ namespace WebAPI.Extensions
             // ====================================================================
             // 6. YETKİLENDİRME POLİTİKALARI (Discord Tarzı Yetki Sistemi)
             // ====================================================================
-            // Bu blok, veritabanındaki "Permission" Claim'leri ile Controller'daki
+            // Bu blok, veritabanındaki "
+            // " Claim'leri ile Controller'daki
             // [Authorize(Policy = ...)] etiketlerini birbirine bağlayan köprüdür.
 
             services.AddAuthorization(options =>

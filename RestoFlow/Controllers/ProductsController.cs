@@ -26,7 +26,7 @@ namespace WebAPI.Controllers
         // ====================================================================
         // [GARSON] Müşteriden sipariş alırken stok miktarını bu sayede görür.
         [HttpGet("getall")]
-        [Authorize(Policy = Permissions.Operations.ViewStockCount)]
+        [Authorize]
         public async Task<IActionResult> GetAll()
         {
             var result = await _productService.GetAllAsync();
