@@ -104,7 +104,7 @@ namespace Business.Concretes
                 _tableRepository.Update(table);
             }
             // ==========================================
-
+             
             await _unitOfWork.SaveChangesAsync();
 
             // 5. ADIM: SİSTEM GÜNLÜĞÜ (LOG) OLUŞTURMA
