@@ -383,12 +383,10 @@ namespace Business.Concretes
         }
         // AddItemsToOrderAsync: Açık olan bir masaya "Ek Sipariş" girilmesini sağlar.
         // Örn: Müşteri yemeğini yedi, üzerine bir de tatlı ve kahve istediğinde bu metot çalışır.
+        // AddItemsToOrderAsync: Açık olan bir masaya "Ek Sipariş" girilmesini sağlar.
         public async Task<IResult> AddItemsToOrderAsync(AddItemsToOrderDto addItemsDto)
         {
             // 1. ADIM: HEDEF ADİSYONU TESPİT ETME
-            // Veritabanından üzerine ekleme yapacağımız siparişi buluyoruz.
-            // .Include(x => x.OrderItems) kullanıyoruz çünkü mevcut adisyonun içine yeni kalemler yerleştireceğiz; 
-            // liste yüklü gelmezse (null olursa) ekleme yapamayız.
             var order = await _orderRepository.GetAll()
                 .Include(x => x.OrderItems)
                 .FirstOrDefaultAsync(x => x.Id == addItemsDto.OrderId);
@@ -400,71 +398,59 @@ namespace Business.Concretes
             }
 
             // [GÜVENLİK DUVARI]: Sadece "Yaşayan" siparişlere ekleme yapılabilir.
-            // Eğer hesap çoktan ödenmişse (Completed) veya sipariş iptal edilmişse (Canceled), 
-            // o adisyon tarih olmuştur. Kapalı hesaba sonradan ürün eklenmesini engelleyerek yolsuzluğu önlüyoruz.
             if (order.Status == OrderStatus.Completed || order.Status == OrderStatus.Canceled)
             {
                 return new ErrorResult("Bu adisyon kapalı olduğu için yeni ürün eklenemez. Lütfen yeni bir masa açın.");
             }
 
-            // Eklenen ürünlerin toplam maliyetini tutacağımız geçici kasa.
             decimal additionalPrice = 0;
 
             // 2. ADIM: YENİ ÜRÜNLERİ TEK TEK KONTROL EDİP ADİSYONA İŞLEME
             foreach (var itemDto in addItemsDto.Items)
             {
-                // [FİYAT GÜVENLİĞİ]: Ürün fiyatını asla tabletten gelen veriye göre belirlemiyoruz.
-                // Veritabanına (ana menüye) gidip ürünün güncel ve gerçek fiyatını çekiyoruz.
                 var product = await _productRepository.GetByIdAsync(itemDto.ProductId);
 
-                // Ürün silinmişse veya restoran yönetimi tarafından "Satışa Kapalı" (IsActive = false) yapılmışsa ekletmiyoruz.
                 if (product == null || !product.IsActive)
                 {
                     return new ErrorResult($"{itemDto.ProductId} referanslı ürün şu an menüde aktif değil.");
                 }
 
-                // Yeni adisyon satırını (OrderItem) hafızada hazırlıyoruz.
                 var newOrderItem = new OrderItem
                 {
-                    OrderId = order.Id,   // Bu satırı hangi masaya bağlayacağımızı söylüyoruz.
+                    OrderId = order.Id,
                     ProductId = product.Id,
                     Quantity = itemDto.Quantity,
-                    UnitPrice = product.Price, // O anki güncel liste fiyatını sabitleyerek kaydediyoruz.
-                    Note = itemDto.Note,       // Müşterinin özel isteği (Örn: "Tatlı az şerbetli olsun")
-                    IsComplimentary = false    // Eklenen ürünler varsayılan olarak ücretlidir.
+                    UnitPrice = product.Price,
+                    Note = itemDto.Note,
+                    IsComplimentary = false
                 };
 
-                // Yeni ürünlerin tutarını hesaplayıp ek tutara yansıtıyoruz.
                 additionalPrice += (newOrderItem.UnitPrice * newOrderItem.Quantity);
-
-                // Hazırladığımız bu yeni satırı, adisyonun mevcut ürün listesine ekliyoruz.
                 order.OrderItems.Add(newOrderItem);
             }
 
             // 3. ADIM: ANA FATURAYI GÜNCELLEME
-            // Mevcut toplamın üzerine sadece yeni gelenlerin fiyatını ekliyoruz. 
-            // Böylece eski toplamı bozmadan güncel rakama ulaşıyoruz.
             order.TotalPrice += additionalPrice;
 
-            // 4. ADIM: OPERASYONEL DURUM YÖNETİMİ
-            // Eğer masa o ana kadar "Hazır" (Ready) durumundaysa, yeni eklenen ürünler henüz pişmediği için
-            // siparişi tekrar "Hazırlanıyor" (Preparing) durumuna çekiyoruz. 
-            // Böylece mutfak ekranında bu masa yeniden "Yeni İş Var!" şeklinde parlamaya başlar.
-            if (order.Status == OrderStatus.Ready || order.Status == OrderStatus.Delivered)
+            // ==========================================
+            // 4. ADIM: SİHİRLİ DOKUNUŞ (DURUM SIFIRLAMA)
+            // ==========================================
+            // Eğer sipariş o an "Hazırlanıyor" veya "Hazır" durumundaysa bile,
+            // yeni bir ürün eklendiği için onu tekrar "ONAY BEKLEYENLER" (Pending) sütununa gönderiyoruz.
+            if (order.Status != OrderStatus.Pending)
             {
-                order.Status = OrderStatus.Preparing;
+                order.Status = OrderStatus.Pending;
             }
 
             // 5. ADIM: TÜM DEĞİŞİKLİKLERİ TEK SEFERDE KAYDETME (COMMIT)
-            // Hem yeni ürün satırlarını hem de siparişin güncellenen toplam fiyatını tek bir işlemde veritabanına yazıyoruz.
             _orderRepository.Update(order);
             await _unitOfWork.SaveChangesAsync();
 
             // Patron için arkada bir iz bırakıyoruz.
-            _logger.LogInformation("EK SİPARİŞ GİRİLDİ: {OrderNumber} nolu masaya {Amount} TL değerinde ilave yapıldı.",
+            _logger.LogInformation("EK SİPARİŞ GİRİLDİ: {OrderNumber} nolu masaya {Amount} TL değerinde ilave yapıldı ve Mutfak Onayına sunuldu.",
                 order.OrderNumber, additionalPrice);
 
-            return new SuccessResult("Ek siparişler başarıyla eklendi ve mutfağa iletildi.");
+            return new SuccessResult("Ek siparişler başarıyla eklendi ve mutfak onayına gönderildi.");
         }
         // ==========================================
         // KASA OPERASYONU: İNDİRİM UYGULAMA
