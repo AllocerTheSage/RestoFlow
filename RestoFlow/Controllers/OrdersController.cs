@@ -245,5 +245,16 @@ namespace WebAPI.Controllers
             if (result.Success) return Ok(result);
             return BadRequest(result);
         }
+        [HttpGet("table/{tableId}/active")]
+        [Authorize]
+        public async Task<IActionResult> GetActiveOrder(int tableId)
+        {
+            var result = await _orderService.GetActiveOrderByTableIdAsync(tableId);
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+            return BadRequest(result); // Masa boşsa buraya düşecek, sorun yok.
+        }
     }
 }

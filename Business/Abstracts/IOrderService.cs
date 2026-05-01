@@ -10,6 +10,7 @@ namespace Business.Abstracts
         Task<IResult> CreateOrderAsync(OrderCreateDto orderDto, string waiterId);
         // Bekleyen siparişleri mutfak ekranı için getirir
         Task<IDataResult<List<Order>>> GetPendingOrdersAsync();
+        Task<IDataResult<Order>> GetActiveOrderByTableIdAsync(int tableId);
 
         // Siparişi "Hazır" durumuna getirir ve stoğu otomatik düşer
         Task<IResult> SetOrderReadyAsync(int orderId);

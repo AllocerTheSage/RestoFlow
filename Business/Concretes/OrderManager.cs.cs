@@ -638,5 +638,28 @@ namespace Business.Concretes
 
             return new SuccessResult("Ürün adisyondan başarıyla silindi. Fiyat (ve gerekliyse stok) güncellendi.");
         }
+        // Masanın o an açık olan (kapanmamış veya iptal edilmemiş) adisyonunu getirir.
+        // ==========================================
+        // 11. MEVCUT (AKTİF) ADİSYONU GETİRME UCU
+        // ==========================================
+        public async Task<IDataResult<Order>> GetActiveOrderByTableIdAsync(int tableId)
+        {
+            // Veritabanına gidip "Bu masaya ait, henüz KAPANMAMIŞ veya İPTAL EDİLMEMİŞ bir sipariş var mı?" diye soruyoruz.
+            // .Include ve .ThenInclude ile adisyonun içindeki ürünleri ve o ürünlerin detaylarını da (isim, fiyat vb.) pakete dahil ediyoruz.
+            var order = await _orderRepository.GetAll()
+                .Include(x => x.OrderItems)
+                    .ThenInclude(oi => oi.Product)
+                .FirstOrDefaultAsync(x => x.TableId == tableId && 
+                                         (x.Status != OrderStatus.Completed && x.Status != OrderStatus.Canceled));
+
+            // Eğer masa boşsa (aktif adisyon yoksa) frontend'e hata dönüyoruz. (Frontend bunu yakalayıp "Sepet Boş" ekranı çizecek)
+            if (order == null)
+            {
+                return new ErrorDataResult<Order>("Bu masanın aktif bir adisyonu yok.");
+            }
+            
+            // Eğer aktif bir adisyon bulduysak, içindeki ürünlerle birlikte frontend'e yolluyoruz.
+            return new SuccessDataResult<Order>(order, "Aktif adisyon başarıyla getirildi.");
+        }
     }
 }

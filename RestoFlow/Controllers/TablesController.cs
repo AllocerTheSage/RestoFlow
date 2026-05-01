@@ -18,6 +18,23 @@ namespace RestoFlow.API.Controllers
             _tableService = tableService;
         }
 
+
+
+        // ==========================================
+        // SAHA HARİTASI (MASALARI LİSTELEME)
+        // ==========================================
+        [HttpGet("dashboard")]
+        public async Task<IActionResult> GetTableDashboard()
+        {
+            // _tableService senin Iloc container'ına göre isimlendirilmiş olmalı
+            var result = await _tableService.GetTableDashboardAsync();
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+            return BadRequest(result);
+        }
+
         // ==========================================
         // 1. YENİ MASA EKLEME UCU (Mevcut Kodun)
         // ==========================================
