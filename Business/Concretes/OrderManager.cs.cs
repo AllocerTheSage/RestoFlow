@@ -38,21 +38,29 @@ namespace Business.Concretes
             _logger = logger;
         }
 
-        // Garsonun tabletten "Siparişi Onayla" dediği an tetiklenen metot.
-        // waiterId parametresini dışarıdan (DTO'dan) değil, Controller içindeki güvenli Token'dan alıyoruz.
         public async Task<IResult> CreateOrderAsync(OrderCreateDto orderDto, string waiterId)
         {
-            // 1. ADIM: YENİ ADİSYON TASLAĞI OLUŞTURMA
+            // ==========================================
+            // DEDEKTİF 1: GARSON ID KONTROLÜ
+            // ==========================================
+            if (string.IsNullOrEmpty(waiterId))
+            {
+                return new ErrorResult("Kayıt Reddedildi: Garson kimliği (Token'dan gelen ID) boş okundu! Controller tarafını kontrol etmeliyiz.");
+            }
+
+            // ==========================================
+            // DEDEKTİF 2: MASA KONTROLÜ
+            // ==========================================
+            var table = await _tableRepository.GetByIdAsync(orderDto.TableId);
+            if (table == null)
+            {
+                return new ErrorResult($"Kayıt Reddedildi: Veritabanında {orderDto.TableId} ID'sine sahip bir masa bulunamadı!");
+            }
+
             var order = new Order
             {
                 OrderNumber = Guid.NewGuid().ToString().Substring(0, 8).ToUpper(),
-
-                // ==========================================
-                // [DEĞİŞTİ]: Eski TableNumber = orderDto.TableNumber satırı SİLİNDİ!
-                // YENİ HALİ: Artık garsonun seçtiği masanın değişmez kimliğini (ID) kaydediyoruz.
-                // ==========================================
                 TableId = orderDto.TableId,
-
                 GuestCount = orderDto.GuestCount,
                 CustomerName = orderDto.CustomerName,
                 WaiterId = waiterId,
@@ -62,14 +70,21 @@ namespace Business.Concretes
 
             decimal totalPrice = 0;
 
-            // 2. ADIM: SİPARİŞ İÇERİĞİNİ (ÜRÜNLERİ) TEK TEK İŞLEME VE GÜVENLİK KONTROLÜ
             foreach (var itemDto in orderDto.Items)
             {
+                // ==========================================
+                // DEDEKTİF 3: ÜRÜN KONTROLÜ
+                // ==========================================
                 var product = await _productRepository.GetByIdAsync(itemDto.ProductId);
 
-                if (product == null || !product.IsActive)
+                if (product == null)
                 {
-                    return new ErrorResult($"İşlem durduruldu: {itemDto.ProductId} referanslı ürün bulunamadı veya şu an satışa kapalı!");
+                    return new ErrorResult($"Kayıt Reddedildi: {itemDto.ProductId} ID'li ürün veritabanında yok!");
+                }
+
+                if (!product.IsActive)
+                {
+                    return new ErrorResult($"Kayıt Reddedildi: {product.Name} şu an satışa kapalı!");
                 }
 
                 var orderItem = new OrderItem
@@ -85,30 +100,26 @@ namespace Business.Concretes
                 order.OrderItems.Add(orderItem);
             }
 
-            // 3. ADIM: TOPLAM FİYATI BELİRLEME
             order.TotalPrice = totalPrice;
 
-            // 4. ADIM: VERİTABANINA KAYIT (COMMIT) VE MASAYI "DOLU" YAPMA ZEKASI
             await _orderRepository.AddAsync(order);
 
-            // ==========================================
-            // [YENİ EKLENDİ]: SİHİRLİ DOKUNUŞ (MASA DURUMUNU GÜNCELLEME)
-            // ==========================================
-            // Garson siparişi açtığı anda gidip o masayı veritabanından buluyoruz.
-            // DİKKAT: "_tableRepository" kısmının altı kırmızı çizilecektir, bu harika! Birazdan onu da sisteme tanıtacağız.
-            var table = await _tableRepository.GetByIdAsync(orderDto.TableId);
-            if (table != null)
-            {
-                // Masayı boş olmaktan çıkarıp "Dolu" (Kırmızı yanacak) durumuna getiriyoruz.
-                table.Status = TableStatus.Occupied;
-                _tableRepository.Update(table);
-            }
-            // ==========================================
-             
-            await _unitOfWork.SaveChangesAsync();
+            // Masa durumunu doluya çekiyoruz
+            table.Status = TableStatus.Occupied;
+            _tableRepository.Update(table);
 
-            // 5. ADIM: SİSTEM GÜNLÜĞÜ (LOG) OLUŞTURMA
-            // [DEĞİŞTİ]: Loglamada artık TableNumber yerine TableId kullanıyoruz ki tam izlenebilirlik sağlansın.
+            // HATA YAKALAMA TUZAĞI (Aynı kalıyor)
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                string realError = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+                _logger.LogError(ex, "SİPARİŞ KAYIT HATASI: {RealError}", realError);
+                return new ErrorResult($"Kayıt Reddedildi (SQL): {realError}");
+            }
+
             _logger.LogInformation("YENİ SİPARİŞ! Adisyon: {OrderNumber}, Masa ID: {TableId}, Tutar: {Total} TL, Garson: {WaiterId}",
                 order.OrderNumber, order.TableId, order.TotalPrice, waiterId);
 

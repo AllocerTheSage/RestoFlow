@@ -51,6 +51,7 @@ namespace WebAPI.Extensions
             services.AddScoped<ITableService, TableManager>();
             services.AddScoped<IPaymentService, PaymentManager>();
             services.AddScoped<ITableCategoryService, TableCategoryManager>();
+            services.AddScoped<ILogService, LogManager>();
 
             // ====================================================================
             // 3. AUTOMAPPER KAYDI (Veri Taşıyıcıları)
