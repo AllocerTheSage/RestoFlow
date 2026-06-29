@@ -1,6 +1,7 @@
 ﻿using Business.Abstracts;
 using Business.DTOs.AuthDtos;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace WebAPI.Controllers
 {
@@ -97,6 +98,21 @@ namespace WebAPI.Controllers
             var result = await _authService.DeleteUserAsync(id);
             if (result.Success) return Ok(result);
             return BadRequest(result);
+        }
+        // Çıkış Yapma (Logout) Ucu - Sadece Log tutmak için kullanılır
+        [HttpPost("logout")]
+        [Microsoft.AspNetCore.Authorization.Authorize] // Sadece giriş yapmış olanlar çıkış yapabilir
+        public async Task<IActionResult> Logout()
+        {
+            // Token'ın içinden çıkış yapan adamın ID'sini yakalıyoruz
+            var userId = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+
+            if (!string.IsNullOrEmpty(userId))
+            {
+                await _authService.LogoutAsync(userId);
+            }
+
+            return Ok(new { success = true, message = "Çıkış logu başarıyla alındı." });
         }
     }
 }

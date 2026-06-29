@@ -233,5 +233,22 @@ namespace Business.Concretes
 
             return new ErrorResult("Personel silinirken bir hata oluştu.");
         }
+        public async Task<IResult> LogoutAsync(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user != null)
+            {
+                // ==========================================
+                // CASUS İŞ BAŞINDA: ÇIKIŞ LOGUNU YAZIYOR
+                // ==========================================
+                await _logService.AddLogAsync(
+                    LogType.UserLogout,
+                    user.Id,
+                    $"{user.FirstName} {user.LastName} sistemden güvenli çıkış yaptı."
+                );
+            }
+
+            return new SuccessResult("Çıkış işlemi başarıyla loglandı.");
+        }
     }
 }

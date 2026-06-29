@@ -13,5 +13,6 @@ namespace Business.Abstracts
         Task<IDataResult<List<UserListDto>>> GetAllUsersAsync();
         Task<IResult> UpdateUserPermissionsAsync(UpdatePermissionDto updateDto);
         Task<IResult> DeleteUserAsync(string userId);
+        Task<IResult> LogoutAsync(string userId);
     }
 }
